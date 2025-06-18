@@ -18,10 +18,16 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        otp: ["27.3.4"]
+        elixir: ["1.18.4"]
+
+    runs-on: ${{matrix.os}}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -32,16 +38,13 @@ jobs:
           git checkout ${{ inputs.tag }}
 
       - name: Set up Elixir
-        uses: erlef/setup-beam@v1
+        uses: marmelasoft/elixir-setup@main
         with:
-          otp-version: "25.0.4"
-          elixir-version: "1.14.1"
+          otp-version: ${{matrix.otp}}
+          elixir-version: ${{matrix.elixir}}
 
-      - name: Install dependencies
-        run: mix deps.get
-
-      - name: Compile
-        run: mix compile --warnings-as-errors
+      - name: Compile project
+        run: mix compile --all-warnings --warnings-as-errors
 
       - name: Build docs
         run: mix docs

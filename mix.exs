@@ -2,6 +2,7 @@ defmodule Francis.MixProject do
   use Mix.Project
 
   @version "0.1.20"
+  @description "A simple wrapper around Plug and Bandit to reduce boilerplate for simple APIs"
   @scm_url "https://github.com/francis-build/francis"
 
   def project do
@@ -9,6 +10,7 @@ defmodule Francis.MixProject do
       name: "Francis",
       app: :francis,
       version: @version,
+      description: @description,
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -16,13 +18,7 @@ defmodule Francis.MixProject do
       docs: docs(),
       source_url: @scm_url,
       elixirc_paths: elixirc_paths(Mix.env()),
-      description:
-        "A simple wrapper around Plug and Bandit to reduce boilerplate for simple APIs",
-      dialyzer: [
-        # Put the project-level PLT in the priv/ directory (instead of the default _build/ location)
-        plt_file: {:no_warn, "priv/plts/project.plt"},
-        plt_add_apps: [:mix, :iex]
-      ],
+      dialyzer: dialyzer(),
       escript: escript()
     ]
   end
@@ -74,6 +70,16 @@ defmodule Francis.MixProject do
 
   defp escript do
     [main_module: Mix.Tasks.Francis.New]
+  end
+
+  defp dialyzer do
+    [
+      list_unused_filters: true,
+      plt_add_deps: :apps_tree,
+      plt_add_apps: [:ex_unit, :iex, :mix],
+      plt_file:
+        {:no_warn, "priv/plts/elixir-#{System.version()}-erlang-otp-#{System.otp_release()}.plt"}
+    ]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test", "test/support"]
