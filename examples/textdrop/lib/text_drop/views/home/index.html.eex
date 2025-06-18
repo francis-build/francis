@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextDrop</title>
+    <link rel="stylesheet" href="/assets/css/simple.css">
+    <link rel="stylesheet" href="/assets/css/custom.css">
+</head>
+
+<body>
+    <header>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/about">About</a>
+        </nav>
+
+        <img src="/assets/images/textdrop.png" alt="TextDrop Logo" style="width: 200px; height: auto;"/>
+        <h1>Welcome to TextDrop</h1>
+        <p>The one stop shop for all your PDF extracting needs.</p>
+    </header>
+
+    <main>
+        <%= if @extracted_text do %>
+        <section>
+            <h2>Extracted Text from Page <%= @page_number %>:</h2>
+            <pre id="extracted_text"><%=  @extracted_text %></pre>
+            <button id="copy_button" onclick="copyToClipboard()">Copy Text to Clipboard</button>
+        </section>
+        <% end %>
+        <section>
+            <h2>Extract Text from Any PDF File</h2>
+            <form id="upload_form" action="/" method="post" enctype="multipart/form-data">
+                <label for="pdf">Upload PDF File:</label>
+                <input type="file" id="pdf" name="pdf" accept=".pdf" required>
+                <br>
+                <label for="page">Page Number:</label>
+                <input type="number" id="page" name="page" min="0" required>
+                <br>
+                <button type="submit">Extract Text</button>
+            </form>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; <%= Date.utc_today().year %> TextDrop. All rights reserved.</p>
+    </footer>
+
+    <script>
+        function copyTextToClipboard(text) {
+            let textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'absolute';
+            textarea.style.left = '-9999px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
+
+        function copyToClipboard() {
+            let copyButton = document.getElementById('copy_button');
+            let extractedText = document.getElementById('extracted_text').textContent;
+
+            copyTextToClipboard(extractedText);
+
+            copyButton.textContent = "Copied!";
+
+            setTimeout(() => {
+                    copyButton.textContent = "Copy Text to Clipboard";
+            }, 2000);
+        }
+    </script>
+</body>
+
+</html>

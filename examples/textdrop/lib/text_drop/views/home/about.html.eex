@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextDrop</title>
+    <link rel="stylesheet" href="/assets/css/simple.css">
+    <link rel="stylesheet" href="/assets/css/custom.css">
+</head>
+
+<body>
+
+    <header>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/about">About</a>
+        </nav>
+
+        <img src="/assets/images/textdrop.png" alt="TextDrop Logo" style="width: 200px; height: auto;"/>
+        <h1>Welcome to TextDrop</h1>
+        <p>The one stop shop for all your PDF extracting needs.</p>
+    </header>
+
+    <main>
+        <section>
+            <h2>About TextDrop</h2>
+            <p>TextDrop is a simple and efficient tool for extracting text from PDF files. Whether you need to extract text for data analysis, research, or any other purpose, TextDrop makes it easy.</p>
+            <p>Simply upload your PDF file, and TextDrop will handle the rest, providing you with clean, extracted text ready for use.</p>
+        </section>
+        <section>
+            <h2>How to Use TextDrop</h2>
+            <ol>
+                <li>Upload your PDF file using the <a href="/#upload_form">upload form</a>.</li>
+                <li>Choose the page number from which you want to extract text.</li>
+                <li>If you want you can define specific areas to extract text from.</li>
+                <li>Click the "Extract Text" button.</li>
+            </ol>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; <%= Date.utc_today().year %> TextDrop. All rights reserved.</p>
+    </footer>
+
+</body>
+
+</html>
