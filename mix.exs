@@ -2,7 +2,7 @@ defmodule Francis.MixProject do
   use Mix.Project
 
   @version "0.1.20"
-  @description "A simple wrapper around Plug and Bandit to reduce boilerplate for simple APIs"
+  @description "Boilerplate killer using Plug with Bandit to quickly build endpoints and websocket listeners"
   @scm_url "https://github.com/francis-build/francis"
 
   def project do
