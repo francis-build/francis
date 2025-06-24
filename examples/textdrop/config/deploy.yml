@@ -1,0 +1,27 @@
+service: textdrop
+
+image: nelsonmestevao/textdrop
+
+servers:
+  web:
+    hosts:
+      - plutus.estevao.org
+
+proxy:
+  ssl: false
+  host: textdrop.estevao.org
+  app_port: 4000
+  healthcheck:
+    path: /health
+
+registry:
+  username: nelsonmestevao
+
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+
+ssh:
+  user: nelson

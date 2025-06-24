@@ -7,8 +7,10 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Redirects the connection to the specified path with a 302 status code.
+
   ## Examples
-  ```
+
+  ```elixir
   redirect(conn, "/new_path")
   ```
   """
@@ -22,8 +24,10 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Redirects the connection to the specified path with a custom status code.
+
   ## Examples
-  ```
+
+  ```elixir
   redirect(conn, 301, "/new_path")
   ```
   """
@@ -37,8 +41,10 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Sends a JSON response with the given status code and data.
+
   ## Examples
-  ```
+
+  ```elixir
   json(conn, 201, %{message: "Success"})
   ```
   """
@@ -51,8 +57,10 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Sends a JSON response with a 200 status code and the given data.
+
   ## Examples
-  ```
+
+  ```elixir
   json(conn, %{message: "Success"})
   ```
   """
@@ -65,8 +73,10 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Sends a text response with the given status code and text.
+
   ## Examples
-  ```
+
+  ```elixir
   text(conn, 200, "Hello World!")
   ```
   """
@@ -79,8 +89,10 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Sends a text response with a 200 status code and the given text.
+
   ## Examples
-  ```
+
+  ```elixir
   text(conn, "Hello World!")
   ```
   """
@@ -93,8 +105,10 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Sends an HTML response with the given status code and HTML content. It will escape the HTML content to prevent XSS attacks.
+
   ## Examples
-  ```
+
+  ```elixir
   html(conn, 200, "<h1>Hello World!</h1>")
   ```
   """
@@ -109,8 +123,10 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Sends an HTML response with the given status code and HTML content. It will escape the HTML content to prevent XSS attacks.
+
   ## Examples
-  ```
+
+  ```elixir
   html(conn, 200, "<h1>Hello World!</h1>")
   ```
   """

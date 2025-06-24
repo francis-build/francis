@@ -35,7 +35,7 @@ defmodule Francis do
 
       import Francis.ResponseHandlers
 
-      def start, do: start(nil, nil)
+      def start, do: start(:normal, [])
 
       static = Keyword.get(unquote(opts), :static)
       parser = Keyword.get(unquote(opts), :parser)
@@ -133,7 +133,7 @@ defmodule Francis do
 
   ## Examples
 
-  ```
+  ```elixir
   defmodule Example.Router do
     use Francis
 
@@ -155,7 +155,7 @@ defmodule Francis do
 
   ## Examples
 
-  ```
+  ```elixir
   defmodule Example.Router do
     use Francis
 
@@ -177,7 +177,7 @@ defmodule Francis do
 
   ## Examples
 
-  ```
+  ```elixir
   defmodule Example.Router do
     use Francis
 
@@ -199,7 +199,7 @@ defmodule Francis do
 
   ## Examples
 
-  ```
+  ```elixir
   defmodule Example.Router do
     use Francis
 

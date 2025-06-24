@@ -18,8 +18,19 @@ defmodule TextDrop.MixProject do
 
   defp deps do
     [
-        {:francis, path: "../../"},
-        {:pythonx, "~> 0.4.4"}
+        {:pdf_extractor, "~> 0.2.1"}
+    ] ++ deps(Mix.env())
+  end
+
+  defp deps(:prod) do
+    [
+        {:francis, "~> 0.1.22"}
+    ]
+  end
+
+  defp deps(_) do
+    [
+        {:francis, path: "../../"}
     ]
   end
 end
