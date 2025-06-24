@@ -20,9 +20,25 @@ def deps do
 end
 ```
 
+You can also use the Francis generator to create all the initial project files. You need to install the francis tasks first.
+
+```bash
+mix archive.install hex francis
+```
+
+Then you can create a new project with:
+
+```bash
+mix francis.new my_app
+```
+
+Use `mix help francis.new` to see all the available options.
+
 ## Usage
 
 To start the server up you can run `mix francis.server` or if you need a iex console you can run with `iex -S mix francis.server`.
+
+## Deployment
 
 To create the Dockerfile that can be used for deployment you can run:
 
@@ -80,6 +96,7 @@ defmodule Example do
   use Francis
 
   get("/", fn _ -> "<html>world</html>" end)
+end
 ```
 
 If you do not handle errors explicitly, Francis will catch them and return a 500 response.
@@ -105,11 +122,11 @@ startup:
 
 ```elixir
 def application do
-   [
-     extra_applications: [:logger],
-     mod: {Example, []}
-   ]
- end
+  [
+    extra_applications: [:logger],
+    mod: {Example, []}
+  ]
+end
 ```
 
 This will ensure that Mix knows what module should be the entrypoint.
@@ -175,4 +192,5 @@ defmodule TestApp do
   unmatched(fn _ -> "not found" end)
 end
 ```
-Check the folder [example](https://github.com/francis-build/francis/tree/main/example) to check the code.
+
+Check the folder [examples](https://github.com/francis-build/francis/tree/main/examples) to see examples of how to use Francis.
