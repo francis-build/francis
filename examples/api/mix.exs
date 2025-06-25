@@ -22,7 +22,8 @@ defmodule Api.MixProject do
       {:francis, "~> 0.1"},
       {:ecto, "~> 3.12"},
       {:ecto_sql, "~> 3.12"},
-      {:postgrex, "~> 0.20.0"}
+      {:postgrex, "~> 0.20.0"},
+      {:req, "~> 0.4", only: :test}
     ]
   end
 
