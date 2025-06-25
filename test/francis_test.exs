@@ -175,6 +175,116 @@ defmodule FrancisTest do
     end
   end
 
+  describe "json/2" do
+    test "returns a JSON response with 200 status" do
+      handler =
+        quote do
+          get("/", fn conn -> json(conn, %{message: "success"}) end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 200
+      assert response.headers["content-type"] == ["application/json; charset=utf-8"]
+      assert response.body == %{"message" => "success"}
+    end
+
+    test "returns a JSON response with list data" do
+      handler =
+        quote do
+          get("/", fn conn -> json(conn, [1, 2, 3]) end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 200
+      assert response.headers["content-type"] == ["application/json; charset=utf-8"]
+      assert response.body == [1, 2, 3]
+    end
+  end
+
+  describe "json/3" do
+    test "returns a JSON response with custom status" do
+      handler =
+        quote do
+          get("/", fn conn -> json(conn, 201, %{id: 123, created: true}) end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 201
+      assert response.headers["content-type"] == ["application/json; charset=utf-8"]
+      assert response.body == %{"id" => 123, "created" => true}
+    end
+  end
+
+  describe "text/2" do
+    test "returns a text response with 200 status" do
+      handler =
+        quote do
+          get("/", fn conn -> text(conn, "Hello, World!") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 200
+      assert response.headers["content-type"] == ["text/plain; charset=utf-8"]
+      assert response.body == "Hello, World!"
+    end
+  end
+
+  describe "text/3" do
+    test "returns a text response with custom status" do
+      handler =
+        quote do
+          get("/", fn conn -> text(conn, 201, "Resource created successfully") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 201
+      assert response.headers["content-type"] == ["text/plain; charset=utf-8"]
+      assert response.body == "Resource created successfully"
+    end
+  end
+
+  describe "html/2" do
+    test "returns an HTML response with 200 status" do
+      handler =
+        quote do
+          get("/", fn conn -> html(conn, "<h1>Hello, World!</h1>") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 200
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.body == "<h1>Hello, World!</h1>"
+    end
+  end
+
+  describe "html/3" do
+    test "returns an HTML response with custom status" do
+      handler =
+        quote do
+          get("/", fn conn -> html(conn, 201, "<h1>Resource Created</h1>") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 201
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.body == "<h1>Resource Created</h1>"
+    end
+  end
+
   describe "unmatched/1" do
     test "returns a response with the given body" do
       handler = quote do: unmatched(fn _ -> "test" end)
@@ -338,14 +448,19 @@ defmodule FrancisTest do
         def error(conn, {:error, :no_match}), do: send_resp(conn, 404, "custom not found error")
       end
 
-      mod =
-        Support.RouteTester.generate_module(handler,
-          error_handler: &ErrorHandlerUnmatched.error/2
-        )
+      log =
+        capture_log(fn ->
+          mod =
+            Support.RouteTester.generate_module(handler,
+              error_handler: &ErrorHandlerUnmatched.error/2
+            )
 
-      response = Req.get!("/", plug: mod, retry: false)
-      assert response.status == 500
-      assert response.body == "Internal Server Error"
+          response = Req.get!("/", plug: mod, retry: false)
+          assert response.status == 500
+          assert response.body == "Internal Server Error"
+        end)
+
+      assert log =~ "Unhandled error:"
     end
   end
 end
