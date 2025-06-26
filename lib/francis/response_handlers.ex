@@ -7,18 +7,28 @@ defmodule Francis.ResponseHandlers do
 
   @doc """
   Redirects the connection to the specified path with a 302 status code.
-  You can specify a different status code by passing the `:status` option.
   ## Examples
-
   ```
   redirect(conn, "/new_path")
-  redirect(conn, "/new_path", status: 301)
   ```
   """
-  @spec redirect(Plug.Conn.t(), String.t(), keyword()) :: Plug.Conn.t()
-  def redirect(conn, path, opts \\ []) do
-    status = Keyword.get(opts, :status, 302)
+  @spec redirect(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def redirect(conn, path) do
+    conn
+    |> put_resp_header("location", path)
+    |> send_resp(302, "")
+    |> halt()
+  end
 
+  @doc """
+  Redirects the connection to the specified path with a custom status code.
+  ## Examples
+  ```
+  redirect(conn, 301, "/new_path")
+  ```
+  """
+  @spec redirect(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
+  def redirect(conn, status, path) do
     conn
     |> put_resp_header("location", path)
     |> send_resp(status, "")
@@ -79,32 +89,5 @@ defmodule Francis.ResponseHandlers do
     conn
     |> put_resp_content_type("text/plain")
     |> send_resp(200, text)
-  end
-
-  @doc """
-  Sends an HTML response with the given status code and HTML content.
-  ## Examples
-  ```
-  html(conn, 200, "<h1>Hello World!</h1>")
-  ```
-  """
-  @spec html(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
-  def html(conn, status, html) do
-    conn
-    |> put_resp_content_type("text/html")
-    |> send_resp(status, html)
-  end
-
-  @doc """
-  Sends an HTML response with a 200 status code and the given HTML content.
-  ## Examples
-  ```
-  html(conn, "<h1>Hello World!</h1>")
-  ```
-  """
-  def html(conn, html) do
-    conn
-    |> put_resp_content_type("text/html")
-    |> send_resp(200, html)
   end
 end
