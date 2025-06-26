@@ -37,6 +37,7 @@ defmodule Api.RouterTest do
     test "returns 404 for non-existent todo" do
       response = Req.get!("/todos/999999", plug: Api.Router)
       assert response.status == 404
+      assert response.body == "Not Found"
     end
   end
 
@@ -79,6 +80,7 @@ defmodule Api.RouterTest do
     test "returns 404 for non-existent todo" do
       response = Req.put!("/todos/999999", plug: Api.Router, json: %{"title" => "Updated"})
       assert response.status == 404
+      assert response.body == "Not Found"
     end
 
     test "returns 422 for invalid data" do
@@ -108,6 +110,7 @@ defmodule Api.RouterTest do
       response = Req.delete!("/todos/999999", plug: Api.Router)
 
       assert response.status == 404
+      assert response.body == "Not Found"
     end
   end
 
@@ -116,7 +119,7 @@ defmodule Api.RouterTest do
       response = Req.get!("/nonexistent", plug: Api.Router)
 
       assert response.status == 404
-      assert response.body == "not found"
+      assert response.body == "Not Found"
     end
   end
 end
