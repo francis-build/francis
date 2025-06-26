@@ -160,11 +160,13 @@ defmodule FrancisTest do
       assert response.status == 302
       assert response.headers["location"] == ["http://example.com/new_path"]
     end
+  end
 
-    test "redirects with a 301 status" do
+  describe "redirect/3" do
+    test "redirects to the given path with custom status" do
       handler =
         quote do
-          get("/", fn conn -> redirect(conn, "/new_path", status: 301) end)
+          get("/", fn conn -> redirect(conn, 301, "/new_path") end)
         end
 
       mod = Support.RouteTester.generate_module(handler)
@@ -172,6 +174,19 @@ defmodule FrancisTest do
 
       assert response.status == 301
       assert response.headers["location"] == ["/new_path"]
+    end
+
+    test "redirects to the given URL with custom status" do
+      handler =
+        quote do
+          get("/", fn conn -> redirect(conn, 301, "http://example.com/new_path") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod, redirect: false)
+
+      assert response.status == 301
+      assert response.headers["location"] == ["http://example.com/new_path"]
     end
   end
 
@@ -265,7 +280,21 @@ defmodule FrancisTest do
 
       assert response.status == 200
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
-      assert response.body == "<h1>Hello, World!</h1>"
+      assert response.body == "&lt;h1&gt;Hello, World!&lt;/h1&gt;"
+    end
+
+    test "HTML is escaped so we handle XSS" do
+      handler =
+        quote do
+          get("/", fn conn -> html(conn, "<script>alert('XSS');</script>") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 200
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.body == "&lt;script&gt;alert(&#39;XSS&#39;);&lt;/script&gt;"
     end
   end
 
@@ -273,7 +302,7 @@ defmodule FrancisTest do
     test "returns an HTML response with custom status" do
       handler =
         quote do
-          get("/", fn conn -> html(conn, 201, "<h1>Resource Created</h1>") end)
+          get("/", fn conn -> html(conn, 201, "<h1>Hello, World!</h1>") end)
         end
 
       mod = Support.RouteTester.generate_module(handler)
@@ -281,7 +310,21 @@ defmodule FrancisTest do
 
       assert response.status == 201
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
-      assert response.body == "<h1>Resource Created</h1>"
+      assert response.body == "&lt;h1&gt;Hello, World!&lt;/h1&gt;"
+    end
+
+    test "HTML is escaped so we handle XSS" do
+      handler =
+        quote do
+          get("/", fn conn -> html(conn, 201, "<script>alert('XSS');</script>") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 201
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.body == "&lt;script&gt;alert(&#39;XSS&#39;);&lt;/script&gt;"
     end
   end
 

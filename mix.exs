@@ -1,7 +1,7 @@
 defmodule Francis.MixProject do
   use Mix.Project
 
-  @version "0.1.21"
+  @version "0.1.22"
   @description "Boilerplate killer using Plug with Bandit to quickly build endpoints and websocket listeners"
   @scm_url "https://github.com/francis-build/francis"
 
@@ -58,6 +58,7 @@ defmodule Francis.MixProject do
       {:jason, "~> 1.4"},
       {:websock, "~> 0.5"},
       {:websock_adapter, "~> 0.5"},
+      {:phoenix_html, "~> 4.2"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:req, "~> 0.5", only: [:test]},
       {:websockex, "~> 0.4", only: [:test]},
