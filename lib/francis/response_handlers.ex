@@ -90,4 +90,36 @@ defmodule Francis.ResponseHandlers do
     |> put_resp_content_type("text/plain")
     |> send_resp(200, text)
   end
+
+  @doc """
+  Sends an HTML response with the given status code and HTML content. It will escape the HTML content to prevent XSS attacks.
+  ## Examples
+  ```
+  html(conn, 200, "<h1>Hello World!</h1>")
+  ```
+  """
+  @spec html(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def html(conn, html) do
+    html = Phoenix.HTML.html_escape(html)
+
+    conn
+    |> put_resp_content_type("text/html")
+    |> send_resp(200, Phoenix.HTML.safe_to_string(html))
+  end
+
+  @doc """
+  Sends an HTML response with the given status code and HTML content. It will escape the HTML content to prevent XSS attacks.
+  ## Examples
+  ```
+  html(conn, 200, "<h1>Hello World!</h1>")
+  ```
+  """
+  @spec html(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
+  def html(conn, status, html) do
+    html = Phoenix.HTML.html_escape(html)
+
+    conn
+    |> put_resp_content_type("text/html")
+    |> send_resp(status, Phoenix.HTML.safe_to_string(html))
+  end
 end
