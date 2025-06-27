@@ -21,7 +21,9 @@ defmodule Francis do
     * :static - Configure Plug.Static to serve static files
     * :parser - Overrides the default configuration for Plug.Parsers
     * :error_handler - Defines a custom error handler for the server
+    * :log_level - Sets the log level for Plug.Logger (default is `:info`)
   """
+  require Logger
   import Plug.Conn
 
   defmacro __using__(opts \\ []) do
@@ -37,15 +39,21 @@ defmodule Francis do
 
       def start, do: start(:normal, [])
 
-      static = Keyword.get(unquote(opts), :static)
-      parser = Keyword.get(unquote(opts), :parser)
+      static = get_configuration(:static, unquote(opts), from: "priv/static", at: "/")
+
+      parser =
+        get_configuration(:parser, unquote(opts),
+          parsers: [:urlencoded, :multipart, :json],
+          json_decoder: Jason
+        )
+
+      log_level = get_configuration(:log_level, unquote(opts), :info)
 
       if static, do: plug(Plug.Static, static)
 
-      if parser,
-        do: plug(Plug.Parsers, parser),
-        else: plug(Plug.Parsers, parsers: [:urlencoded, :multipart, :json], json_decoder: Jason)
+      plug(Plug.Parsers, parser)
 
+      plug(Plug.Logger, log: log_level)
       plug(Plug.Head)
 
       def start(_type, _args) do
@@ -363,6 +371,25 @@ defmodule Francis do
       match _ do
         handle_response(unquote(handler), var!(conn), 404)
       end
+    end
+  end
+
+  @doc """
+  Retrieves the configuration for a given key, checking both the macro options and the application environment.
+  """
+  @spec get_configuration(atom(), Keyword.t(), any()) :: any()
+  def get_configuration(key, opts, default) do
+    opts = Keyword.get(opts, key)
+    config = Application.get_env(:francis, key)
+
+    if opts && config do
+      Logger.warning(
+        "Both application configuration and macro option provided for #{key}. Using macro option."
+      )
+
+      opts
+    else
+      opts || config || default
     end
   end
 end

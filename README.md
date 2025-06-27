@@ -46,17 +46,42 @@ To create the Dockerfile that can be used for deployment you can run:
 mix francis.release
 ```
 
-## Dev mode
+## Configuration
 
-If you want to have a watcher that will reload the server when you change your code you can use the `dev` configuration option:
+You can configure Francis in your `config/config.exs` file. The following options are available:
+
+- `dev` - If set to `true`, it will enable the development mode which will automatically reload the server when you change your code. Defaults to `false`.
+- `bandit_opts` - Options to be passed to Bandit
+- `static` - Configure Plug.Static to serve static files
+- `parser` - Overrides the default configuration for Plug.Parsers
+- `error_handler` - Defines a custom error handler for the server
+- `log_level` - Sets the log level for Plug.Logger (default is `:info`)
 
 ```elixir
 import Config
 
-config :francis, dev: true
+config :francis,
+  dev: false,
+  bandit_opts: [port: 4000],
+  static: [from: "priv/static", at: "/"],
+  parser: [parsers: [:json, :urlencoded], pass: ["*/*"]],
+  error_handler: &Example.error/2,
+  log_level: :info
 ```
 
-It defaults to `false`
+You can also set the values in `use` macro:
+
+```elixir
+defmodule Example do
+  use Francis,
+    dev: true,
+    bandit_opts: [port: 4000],
+    static: [from: "priv/static", at: "/"],
+    parser: [parsers: [:json, :urlencoded], pass: ["*/* "]],
+    error_handler: &Example.error/2,
+    log_level: :info
+end
+```
 
 ## Error Handling
 

@@ -506,4 +506,41 @@ defmodule FrancisTest do
       assert log =~ "Unhandled error:"
     end
   end
+
+  describe "get_configuration/3" do
+    setup do
+      # Clean up any config before and after
+      on_exit(fn ->
+        Application.delete_env(:francis, :test_key)
+      end)
+
+      :ok
+    end
+
+    test "returns the option value if present and no app config" do
+      assert Francis.get_configuration(:test_key, [test_key: "opt_val"], "default") == "opt_val"
+    end
+
+    test "returns the app config value if no option present" do
+      Application.put_env(:francis, :test_key, "app_val")
+      assert Francis.get_configuration(:test_key, [], "default") == "app_val"
+    end
+
+    test "returns the option value and logs warning if both option and app config present" do
+      Application.put_env(:francis, :test_key, "app_val")
+
+      log =
+        capture_log(fn ->
+          assert Francis.get_configuration(:test_key, [test_key: "opt_val"], "default") ==
+                   "opt_val"
+        end)
+
+      assert log =~
+               "Both application configuration and macro option provided for test_key. Using macro option."
+    end
+
+    test "returns the default if neither option nor app config present" do
+      assert Francis.get_configuration(:test_key, [], "default") == "default"
+    end
+  end
 end
