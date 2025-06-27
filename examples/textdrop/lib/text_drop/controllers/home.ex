@@ -1,15 +1,16 @@
 defmodule TextDrop.Controllers.Home do
-  @upload_dir :code.priv_dir(:text_drop) |> Path.join("uploads")
+  @upload_dir Path.join("priv", "uploads")
 
   def index(%{params: params = %{"id" => id}}) do
     file_path = to_file_path(id)
     page_number = String.to_integer(params["page"] || "0")
-    extracted_text = TextDrop.PdfPlumber.extract_text(file_path, page_number)
+    result = PdfExtractor.extract_text(file_path, List.wrap(page_number))
+    extracted_text = result[page_number]
     TextDrop.Views.Home.index(%{page_number: page_number, extracted_text: extracted_text})
   end
 
   def index(_conn) do
-    TextDrop.Views.Home.index(%{})
+    TextDrop.Views.Home.index(%{extracted_text: nil})
   end
 
   def create(conn = %{params: %{"pdf" => pdf}}) do
