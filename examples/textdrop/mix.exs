@@ -6,9 +6,10 @@ defmodule TextDrop.MixProject do
       app: :text_drop,
       version: "0.1.0",
       elixir: "~> 1.18",
+      elixirc_paths: ["lib"],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      elixirc_paths: ["lib"]
+      aliases: aliases()
     ]
   end
 
@@ -31,6 +32,12 @@ defmodule TextDrop.MixProject do
   defp deps(_) do
     [
         {:francis, path: "../../"}
+    ]
+  end
+
+  defp aliases() do
+    [
+      "assets.deploy": ["francis.digest"],
     ]
   end
 end

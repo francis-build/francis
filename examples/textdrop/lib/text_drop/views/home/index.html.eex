@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TextDrop</title>
-    <link rel="stylesheet" href="/assets/css/simple.css">
-    <link rel="stylesheet" href="/assets/css/custom.css">
+    <link rel="stylesheet" href="<%= static_path("css/simple.css") %>">
+    <link rel="stylesheet" href="<%= static_path("css/custom.css") %>">
 </head>
 
 <body>
@@ -16,7 +16,7 @@
             <a href="/about">About</a>
         </nav>
 
-        <img src="/assets/images/textdrop.png" alt="TextDrop Logo" style="width: 200px; height: auto;"/>
+        <img src="<%= static_path("images/textdrop.png") %>" alt="TextDrop Logo" style="width: 200px; height: auto;"/>
         <h1>Welcome to TextDrop</h1>
         <p>The one stop shop for all your PDF extracting needs.</p>
     </header>
