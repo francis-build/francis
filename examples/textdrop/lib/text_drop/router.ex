@@ -1,5 +1,5 @@
 defmodule TextDrop.Router do
-  use Francis, static: [from: "assets", at: "/assets"]
+  use Francis, static: [from: "priv/static", at: "/assets", gzip: true], bandit_opts: [port: 5050]
 
   get("/health", fn _ -> "OK" end)
 

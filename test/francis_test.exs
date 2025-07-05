@@ -84,7 +84,7 @@ defmodule FrancisTest do
       bandit_opts = [port: port]
       mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
 
-      assert capture_log(fn ->
+      assert capture_log([level: :info], fn ->
                {:ok, _} = start_supervised(mod)
              end) =~
                "Running #{mod |> Module.split() |> List.last()} with Bandit #{Application.spec(:bandit, :vsn)} at 0.0.0.0:#{port}"
