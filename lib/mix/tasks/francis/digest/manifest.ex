@@ -12,8 +12,8 @@ defmodule Mix.Tasks.Francis.Digest.Manifest do
   end
 
   defp build_manifest_entries(digested_files) do
-    Enum.reduce(digested_files, %{}, fn file_info, acc ->
-      Map.put(acc, file_info.logical_path, to_entry(file_info))
+    Enum.into(digested_files, %{}, fn file_info ->
+      {file_info.logical_path, to_entry(file_info)}
     end)
   end
 
