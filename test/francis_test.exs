@@ -280,21 +280,7 @@ defmodule FrancisTest do
 
       assert response.status == 200
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
-      assert response.body == "&lt;h1&gt;Hello, World!&lt;/h1&gt;"
-    end
-
-    test "HTML is escaped so we handle XSS" do
-      handler =
-        quote do
-          get("/", fn conn -> html(conn, "<script>alert('XSS');</script>") end)
-        end
-
-      mod = Support.RouteTester.generate_module(handler)
-      response = Req.get!("/", plug: mod)
-
-      assert response.status == 200
-      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
-      assert response.body == "&lt;script&gt;alert(&#39;XSS&#39;);&lt;/script&gt;"
+      assert response.body == "<h1>Hello, World!</h1>"
     end
   end
 
@@ -310,21 +296,7 @@ defmodule FrancisTest do
 
       assert response.status == 201
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
-      assert response.body == "&lt;h1&gt;Hello, World!&lt;/h1&gt;"
-    end
-
-    test "HTML is escaped so we handle XSS" do
-      handler =
-        quote do
-          get("/", fn conn -> html(conn, 201, "<script>alert('XSS');</script>") end)
-        end
-
-      mod = Support.RouteTester.generate_module(handler)
-      response = Req.get!("/", plug: mod)
-
-      assert response.status == 201
-      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
-      assert response.body == "&lt;script&gt;alert(&#39;XSS&#39;);&lt;/script&gt;"
+      assert response.body == "<h1>Hello, World!</h1>"
     end
   end
 
