@@ -104,7 +104,11 @@ defmodule Francis.ResponseHandlers do
   end
 
   @doc """
-  Sends an HTML response with the given status code and HTML content. It will escape the HTML content to prevent XSS attacks.
+  Sends an HTML response with the given status code and HTML content.
+
+  **Warning:** The following function does **not** escape HTML content.
+  Passing user-generated or untrusted input may result in [Cross-Site Scripting (XSS)](https://owasp.org/www-community/attacks/xss/) vulnerabilities.
+  Only use this function with trusted, static HTML content. Look into [phoenix_html](https://github.com/phoenixframework/phoenix_html/)
 
   ## Examples
 
@@ -112,17 +116,20 @@ defmodule Francis.ResponseHandlers do
   html(conn, 200, "<h1>Hello World!</h1>")
   ```
   """
+  # sobelow_skip ["XSS.SendResp"]
   @spec html(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def html(conn, html) do
-    html = Phoenix.HTML.html_escape(html)
-
     conn
     |> put_resp_content_type("text/html")
-    |> send_resp(200, Phoenix.HTML.safe_to_string(html))
+    |> send_resp(200, html)
   end
 
   @doc """
-  Sends an HTML response with the given status code and HTML content. It will escape the HTML content to prevent XSS attacks.
+  Sends an HTML response with the given status code and HTML content.
+
+  **Warning:** The following function does **not** escape HTML content.
+  Passing user-generated or untrusted input may result in [Cross-Site Scripting (XSS)](https://owasp.org/www-community/attacks/xss/) vulnerabilities.
+  Only use this function with trusted, static HTML content. Look into [phoenix_html](https://github.com/phoenixframework/phoenix_html/)
 
   ## Examples
 
@@ -130,12 +137,11 @@ defmodule Francis.ResponseHandlers do
   html(conn, 200, "<h1>Hello World!</h1>")
   ```
   """
+  # sobelow_skip ["XSS.SendResp"]
   @spec html(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
   def html(conn, status, html) do
-    html = Phoenix.HTML.html_escape(html)
-
     conn
     |> put_resp_content_type("text/html")
-    |> send_resp(status, Phoenix.HTML.safe_to_string(html))
+    |> send_resp(status, html)
   end
 end
