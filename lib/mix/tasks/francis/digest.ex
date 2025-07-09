@@ -103,7 +103,6 @@ defmodule Mix.Tasks.Francis.Digest do
     exclude_patterns =
       opts
       |> Keyword.get_values(:exclude)
-      |> Enum.map(&String.to_charlist/1)
 
     Keyword.put(opts, :exclude, exclude_patterns)
   end
@@ -120,9 +119,23 @@ defmodule Mix.Tasks.Francis.Digest do
     filename = Path.basename(file_path)
 
     Enum.any?(exclude_patterns, fn pattern ->
-      :filelib.wildcard(pattern, [filename])
-      |> length() > 0
+      match_pattern?(filename, pattern)
     end)
+  end
+
+  defp match_pattern?(filename, pattern) do
+    # Convert glob pattern to regex
+    regex_pattern =
+      pattern
+      |> String.replace(".", "\\.")
+      |> String.replace("*", ".*")
+      |> String.replace("?", ".")
+      |> then(&("^" <> &1 <> "$"))
+
+    case Regex.compile(regex_pattern) do
+      {:ok, regex} -> Regex.match?(regex, filename)
+      _ -> false
+    end
   end
 
   defp digest_file(file_path, input_path, output_path, opts) do
