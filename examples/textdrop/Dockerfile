@@ -41,7 +41,6 @@ ENV MIX_ENV="prod"
 # Copy the release from the build stage
 COPY --from=build /app/_build/${MIX_ENV}/rel/text_drop ./
 COPY --from=build /app/priv ./priv
-COPY --from=build /app/assets ./assets
 
 # Set environment variables
 ENV HOME=/app
