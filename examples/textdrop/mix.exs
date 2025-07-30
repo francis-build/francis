@@ -19,7 +19,7 @@ defmodule TextDrop.MixProject do
 
   defp deps do
     [
-        {:pdf_extractor, "~> 0.2.1"}
+        {:pdf_extractor, "~> 0.5.0"}
     ] ++ deps(Mix.env())
   end
 
