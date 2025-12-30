@@ -25,7 +25,7 @@ defmodule TextDrop.MixProject do
 
   defp deps(:prod) do
     [
-        {:francis, "~> 0.1.22"}
+        {:francis, "~> 0.1"}
     ]
   end
 

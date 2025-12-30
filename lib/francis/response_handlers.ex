@@ -11,7 +11,11 @@ defmodule Francis.ResponseHandlers do
   ## Examples
 
   ```elixir
-  redirect(conn, "/new_path")
+  defmodule Example do
+    use Francis
+
+    get("/old", fn conn -> redirect(conn, "/new") end)
+  end
   ```
   """
   @spec redirect(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
@@ -28,7 +32,11 @@ defmodule Francis.ResponseHandlers do
   ## Examples
 
   ```elixir
-  redirect(conn, 301, "/new_path")
+  defmodule Example do
+    use Francis
+
+    get("/old", fn conn -> redirect(conn, 301, "/new") end)
+  end
   ```
   """
   @spec redirect(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
@@ -45,7 +53,13 @@ defmodule Francis.ResponseHandlers do
   ## Examples
 
   ```elixir
-  json(conn, 201, %{message: "Success"})
+  defmodule Example do
+    use Francis
+
+    post("/users", fn conn ->
+      json(conn, 201, %{id: 123, message: "User created"})
+    end)
+  end
   ```
   """
   @spec json(Plug.Conn.t(), integer(), map() | list()) :: Plug.Conn.t()
@@ -61,7 +75,13 @@ defmodule Francis.ResponseHandlers do
   ## Examples
 
   ```elixir
-  json(conn, %{message: "Success"})
+  defmodule Example do
+    use Francis
+
+    get("/api/data", fn conn ->
+      json(conn, %{message: "Success", data: [1, 2, 3]})
+    end)
+  end
   ```
   """
   @spec json(Plug.Conn.t(), map() | list()) :: Plug.Conn.t()
@@ -77,7 +97,13 @@ defmodule Francis.ResponseHandlers do
   ## Examples
 
   ```elixir
-  text(conn, 200, "Hello World!")
+  defmodule Example do
+    use Francis
+
+    get("/text", fn conn ->
+      text(conn, 200, "Hello World!")
+    end)
+  end
   ```
   """
   @spec text(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
@@ -93,7 +119,13 @@ defmodule Francis.ResponseHandlers do
   ## Examples
 
   ```elixir
-  text(conn, "Hello World!")
+  defmodule Example do
+    use Francis
+
+    get("/hello", fn conn ->
+      text(conn, "Hello World!")
+    end)
+  end
   ```
   """
   @spec text(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
@@ -104,7 +136,7 @@ defmodule Francis.ResponseHandlers do
   end
 
   @doc """
-  Sends an HTML response with the given status code and HTML content.
+  Sends an HTML response with a 200 status code and HTML content.
 
   **Warning:** The following function does **not** escape HTML content.
   Passing user-generated or untrusted input may result in [Cross-Site Scripting (XSS)](https://owasp.org/www-community/attacks/xss/) vulnerabilities.
@@ -113,7 +145,13 @@ defmodule Francis.ResponseHandlers do
   ## Examples
 
   ```elixir
-  html(conn, 200, "<h1>Hello World!</h1>")
+  defmodule Example do
+    use Francis
+
+    get("/", fn conn ->
+      html(conn, "<h1>Hello World!</h1>")
+    end)
+  end
   ```
   """
   # sobelow_skip ["XSS.SendResp"]
@@ -134,7 +172,13 @@ defmodule Francis.ResponseHandlers do
   ## Examples
 
   ```elixir
-  html(conn, 200, "<h1>Hello World!</h1>")
+  defmodule Example do
+    use Francis
+
+    get("/", fn conn ->
+      html(conn, 201, "<h1>Created</h1>")
+    end)
+  end
   ```
   """
   # sobelow_skip ["XSS.SendResp"]
