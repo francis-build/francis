@@ -11,16 +11,16 @@ defmodule Api.Router do
     Todos.get_todo!(String.to_integer(id))
   end)
 
-  post("/todos", fn %{params: attrs} ->
+  post("/todos", fn %{params: attrs} = conn ->
     with {:ok, created} <- Todos.create_todo(attrs) do
       json(conn, 201, created)
     end
   end)
 
-  put("/todos/:id", fn %{params: attrs} = conn ->
-    with todo <- Todos.get_todo!(id),
+  put("/todos/:id", fn %{params: %{"id" => id} = attrs} = conn ->
+    with todo <- Todos.get_todo!(String.to_integer(id)),
          {:ok, updated} <- Todos.update_todo(todo, attrs) do
-      json(conn, 204, updated)
+      json(conn, 200, updated)
     end
   end)
 
@@ -30,6 +30,8 @@ defmodule Api.Router do
       text(conn, 204, "")
     end
   end)
+
+  unmatched(fn _ -> "not found" end)
 
   def error(conn, %Ecto.NoResultsError{}), do: text(conn, 404, "Not Found")
 

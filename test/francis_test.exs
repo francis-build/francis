@@ -63,6 +63,19 @@ defmodule FrancisTest do
     setup do
       port = Enum.random(5000..10_000)
 
+      on_exit(fn ->
+        # Find the process listening on the port and send SIGINT
+        case System.cmd("lsof", ["-ti", ":#{port}"], stderr_to_stdout: true) do
+          {pid_str, 0} when pid_str != "" ->
+            pid = String.trim(pid_str) |> String.to_integer()
+            System.cmd("kill", ["-INT", to_string(pid)])
+            Process.sleep(100)
+
+          _ ->
+            :ok
+        end
+      end)
+
       %{port: port}
     end
 
@@ -72,7 +85,7 @@ defmodule FrancisTest do
 
       handler =
         quote do
-          ws(unquote(path), fn "test", socket ->
+          ws(unquote(path), fn {:received, "test"}, socket ->
             send(unquote(parent_pid), {:handler, "handler_received"})
             send(socket.transport, "late_sent")
             send(socket.transport, %{key: "value"})
@@ -110,7 +123,7 @@ defmodule FrancisTest do
 
       handler =
         quote do
-          ws(unquote(path), fn "test", socket ->
+          ws(unquote(path), fn {:received, "test"}, socket ->
             send(unquote(parent_pid), {:handler, "handler_received"})
             :noreply
           end)
@@ -129,6 +142,519 @@ defmodule FrancisTest do
       WebSockex.send_frame(tester_pid, {:text, "test"})
       assert_receive {:handler, "handler_received"}
       refute_receive :_, 500
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "handles :join event", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn
+            :join, socket ->
+              send(unquote(parent_pid), {:handler, :join_received})
+              {:reply, %{type: "welcome", id: socket.id}}
+
+            {:received, message}, _socket ->
+              {:reply, message}
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      _tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Join event should be triggered on connection
+      assert_receive {:handler, :join_received}, 1000
+      assert_receive {:client, %{"type" => "welcome", "id" => _id}}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "handles {:close, reason} event", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn
+            {:close, reason}, _socket ->
+              send(unquote(parent_pid), {:handler, {:close, reason}})
+              :ok
+
+            {:received, _message}, _socket ->
+              :noreply
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Send a close frame to trigger clean WebSocket close
+      WebSockex.send_frame(tester_pid, :close)
+
+      # Close event should be triggered
+      assert_receive {:handler, {:close, _reason}}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "send to transport is automatically forwarded to client", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, socket ->
+            # Messages sent to transport are automatically forwarded
+            send(socket.transport, "auto_forward")
+            {:reply, message}
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      WebSockex.send_frame(tester_pid, {:text, "test"})
+
+      # Should receive both the auto-forwarded message and the reply
+      assert_receive {:client, "auto_forward"}, 1000
+      assert_receive {:client, "test"}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "full lifecycle with pattern matching", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn
+            :join, socket ->
+              send(unquote(parent_pid), {:lifecycle, :join})
+              {:reply, %{event: "joined", id: socket.id}}
+
+            {:close, reason}, _socket ->
+              send(unquote(parent_pid), {:lifecycle, {:close, reason}})
+              :ok
+
+            {:received, message}, socket ->
+              send(unquote(parent_pid), {:lifecycle, {:message, message}})
+              # Messages sent to transport are auto-forwarded
+              send(socket.transport, "broadcast: #{message}")
+              {:reply, "echo: #{message}"}
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # 1. Join event
+      assert_receive {:lifecycle, :join}, 1000
+      assert_receive {:client, %{"event" => "joined", "id" => _}}, 1000
+
+      # 2. Send a message
+      WebSockex.send_frame(tester_pid, {:text, "hello"})
+      assert_receive {:lifecycle, {:message, "hello"}}, 1000
+      assert_receive {:client, "echo: hello"}, 1000
+      assert_receive {:client, "broadcast: hello"}, 1000
+
+      # 3. Close - send close frame to trigger clean WebSocket close
+      WebSockex.send_frame(tester_pid, :close)
+      assert_receive {:lifecycle, {:close, _}}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "works with only received handler", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      # Simple handler without lifecycle events
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            send(unquote(parent_pid), {:handler, message})
+            {:reply, "got: #{message}"}
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      WebSockex.send_frame(tester_pid, {:text, "simple"})
+      assert_receive {:handler, "simple"}, 1000
+      assert_receive {:client, "got: simple"}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "handles :ok return value same as :noreply", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn
+            {:close, _reason}, _socket ->
+              :ok
+
+            {:received, message}, _socket ->
+              send(unquote(parent_pid), {:handler, message})
+              :ok
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      WebSockex.send_frame(tester_pid, {:text, "test"})
+      assert_receive {:handler, "test"}, 1000
+      # Should not receive any reply
+      refute_receive {:client, _}, 500
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "handles missing :join pattern match gracefully", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      # Handler without :join clause - should not crash
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            send(unquote(parent_pid), {:handler, message})
+            {:reply, "got: #{message}"}
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Connection should succeed even without :join handler
+      # Should be able to send messages
+      WebSockex.send_frame(tester_pid, {:text, "test"})
+      assert_receive {:handler, "test"}, 1000
+      assert_receive {:client, "got: test"}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "handles missing {:close, reason} pattern match gracefully", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      # Handler with :join but without {:close, reason} clause - should not crash on close
+      handler =
+        quote do
+          ws(unquote(path), fn
+            :join, socket ->
+              send(unquote(parent_pid), {:handler, :join_received})
+              {:reply, %{type: "welcome", id: socket.id}}
+
+            {:received, message}, _socket ->
+              send(unquote(parent_pid), {:handler, message})
+              {:reply, "got: #{message}"}
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Join should work
+      assert_receive {:handler, :join_received}, 1000
+      assert_receive {:client, %{"type" => "welcome", "id" => _id}}, 1000
+
+      # Send a message
+      WebSockex.send_frame(tester_pid, {:text, "hello"})
+      assert_receive {:handler, "hello"}, 1000
+      assert_receive {:client, "got: hello"}, 1000
+
+      # Close should not crash even without {:close, reason} handler
+      WebSockex.send_frame(tester_pid, :close)
+      # Give it a moment to process the close
+      Process.sleep(100)
+      # Should not receive any error messages
+      refute_receive {:handler, {:close, _}}, 500
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "responds to client ping with pong", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            {:reply, message}
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Send ping frame from client
+      WebSockex.send_frame(tester_pid, {:ping, "test_payload"})
+
+      # Should receive pong response automatically
+      assert_receive {:client, {:pong, "test_payload"}}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "sends ping frames at configured heartbeat interval", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      # Use a short interval for testing (500ms)
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            {:reply, message}
+          end, heartbeat_interval: 500)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Wait for first ping (should arrive within 500ms + some buffer)
+      assert_receive {:client, {:ping, _payload}}, 1000
+
+      # Wait for second ping to confirm it's recurring
+      assert_receive {:client, {:ping, _payload}}, 1000
+
+      # Clean up
+      WebSockex.send_frame(tester_pid, :close)
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "handles pong frames from client", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            {:reply, message}
+          end, heartbeat_interval: 500)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Wait for server to send ping
+      assert_receive {:client, {:ping, _payload}}, 1000
+
+      # Send pong back (WebSockex should handle this automatically, but we can also send manually)
+      # The server should handle it gracefully without errors
+      WebSockex.send_frame(tester_pid, {:pong, <<>>})
+
+      # Connection should still work
+      WebSockex.send_frame(tester_pid, {:text, "test"})
+      assert_receive {:client, "test"}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "disables heartbeat when heartbeat_interval is nil", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            {:reply, message}
+          end, heartbeat_interval: nil)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Wait a bit to ensure no ping frames are sent
+      Process.sleep(1000)
+
+      # Should not receive any ping frames
+      refute_receive {:client, {:ping, _payload}}, 500
+
+      # But regular messages should still work
+      WebSockex.send_frame(tester_pid, {:text, "test"})
+      assert_receive {:client, "test"}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "uses default heartbeat interval when not specified", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      # No heartbeat_interval option - should use default (30_000ms)
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            {:reply, message}
+          end)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # With default 30s interval, we should receive a ping within 31 seconds
+      # But for testing purposes, we'll just verify the connection works
+      # and that ping frames will eventually be sent (we can't wait 30s in tests)
+      WebSockex.send_frame(tester_pid, {:text, "test"})
+      assert_receive {:client, "test"}, 1000
+
+      # Verify no immediate ping (since default is 30s)
+      refute_receive {:client, {:ping, _payload}}, 1000
+
+      :ok
+    end
+
+    @tag :capture_log
+    test "ping/pong frames work alongside regular messages", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            {:reply, "echo: #{message}"}
+          end, heartbeat_interval: 500)
+        end
+
+      bandit_opts = [port: port]
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: bandit_opts)
+
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Send regular message
+      WebSockex.send_frame(tester_pid, {:text, "hello"})
+      assert_receive {:client, "echo: hello"}, 1000
+
+      # Send ping
+      WebSockex.send_frame(tester_pid, {:ping, "ping_payload"})
+      assert_receive {:client, {:pong, "ping_payload"}}, 1000
+
+      # Receive server ping
+      assert_receive {:client, {:ping, _payload}}, 1000
+
+      # Send another regular message - should still work
+      WebSockex.send_frame(tester_pid, {:text, "world"})
+      assert_receive {:client, "echo: world"}, 1000
 
       :ok
     end
