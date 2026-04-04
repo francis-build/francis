@@ -103,7 +103,7 @@ defmodule Mix.Tasks.Francis.DigestTest do
       assert Map.has_key?(css_entry, "digested_path")
       assert Map.has_key?(css_entry, "size")
       assert Map.has_key?(css_entry, "mtime")
-      assert String.length(css_entry["digest"]) == 8
+      assert String.length(css_entry["digest"]) == 12
       assert String.contains?(css_entry["digested_path"], css_entry["digest"])
     end
 
@@ -299,7 +299,7 @@ defmodule Mix.Tasks.Francis.DigestTest do
       assert {:ok, _} = NaiveDateTime.from_iso8601(css_entry["mtime"])
     end
 
-    test "generates 8-character digests" do
+    test "generates 12-character digests" do
       capture_io(fn ->
         Digest.run([@test_assets_dir, "--output", @test_output_dir])
       end)
@@ -308,8 +308,8 @@ defmodule Mix.Tasks.Francis.DigestTest do
       {:ok, manifest} = File.read!(manifest_path) |> Jason.decode()
 
       Enum.each(manifest["files"], fn {_path, entry} ->
-        assert String.length(entry["digest"]) == 8
-        assert String.match?(entry["digest"], ~r/^[a-f0-9]{8}$/)
+        assert String.length(entry["digest"]) == 12
+        assert String.match?(entry["digest"], ~r/^[a-f0-9]{12}$/)
       end)
     end
 

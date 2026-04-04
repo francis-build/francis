@@ -697,10 +697,10 @@ defmodule FrancisTest do
         end
 
       mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod, redirect: false, retry: false)
 
-      assert_raise Plug.Conn.WrapperError, ~r/ArgumentError/, fn ->
-        Req.get!("/", plug: mod, redirect: false)
-      end
+      # The ArgumentError is caught by handle_errors, resulting in 500
+      assert response.status == 500
     end
 
     test "rejects protocol-relative URLs" do
@@ -739,10 +739,10 @@ defmodule FrancisTest do
         end
 
       mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod, redirect: false, retry: false)
 
-      assert_raise Plug.Conn.WrapperError, ~r/ArgumentError/, fn ->
-        Req.get!("/", plug: mod, redirect: false)
-      end
+      # The ArgumentError is caught by handle_errors, resulting in 500
+      assert response.status == 500
     end
   end
 
