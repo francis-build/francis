@@ -233,8 +233,8 @@ defmodule FrancisE2ETest do
 
       response = Req.get!("http://localhost:#{port}/")
 
-      assert response.headers["content-security-policy-report-only"] != []
-      assert response.headers["content-security-policy"] == []
+      assert response.headers["content-security-policy-report-only"] != nil
+      assert response.headers["content-security-policy"] == nil
     end
   end
 
