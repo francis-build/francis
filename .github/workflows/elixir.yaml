@@ -33,8 +33,11 @@ jobs:
           elixir-version: ${{matrix.elixir}}
           cache-plts: true
 
-      - name: 🔬 Run the tests
-        run: mix test --all-warnings --warnings-as-errors
+      - name: 🔬 Run unit tests
+        run: mix test --exclude e2e --all-warnings --warnings-as-errors
+
+      - name: 🌐 Run e2e tests
+        run: mix test --only e2e --all-warnings --warnings-as-errors
 
       - name: 💡 Lint the code
         run: mix credo --strict --all
