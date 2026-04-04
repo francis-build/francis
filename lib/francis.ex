@@ -22,6 +22,32 @@ defmodule Francis do
     * :parser - Overrides the default configuration for Plug.Parsers
     * :error_handler - Defines a custom error handler for the server
     * :log_level - Sets the log level for Plug.Logger (default is `:info`)
+
+  ## Composing Routers with `forward/2`
+
+  Since Francis builds on `Plug.Router`, you can compose multiple routers
+  using `forward/2`:
+
+      defmodule Api do
+        use Francis
+        get("/health", fn _ -> "ok" end)
+      end
+
+      defmodule App do
+        use Francis
+        forward("/api", to: Api)
+        get("/", fn _ -> "Home" end)
+      end
+
+  ## Telemetry Events
+
+  Francis emits the following telemetry events via `Plug.Router`:
+
+    * `[:plug, :router_dispatch, :start]` - dispatched before route handler execution
+    * `[:plug, :router_dispatch, :stop]` - dispatched after successful route handler execution
+    * `[:plug, :router_dispatch, :exception]` - dispatched on route handler exception
+
+  Each event includes `%{conn: conn, route: path, router: module}` in its metadata.
   """
   require Logger
   import Plug.Conn
@@ -129,7 +155,7 @@ defmodule Francis do
       end
 
       defp internal_server_error(conn) do
-        conn |> put_status(500) |> send_resp(500, "Internal Server Error") |> halt()
+        conn |> send_resp(500, "Internal Server Error") |> halt()
       end
     end
   end
@@ -347,7 +373,7 @@ defmodule Francis do
   end
 
   @doc """
-  Defines an action for umatched routes and returns 404
+  Defines an action for unmatched routes and returns 404
   """
   @spec unmatched((Plug.Conn.t() -> binary() | map() | Plug.Conn.t())) :: Macro.t()
   defmacro unmatched(handler) do

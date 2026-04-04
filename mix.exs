@@ -31,10 +31,10 @@ defmodule Francis.MixProject do
     [
       files: [
         "lib",
-        "test",
         "mix.exs",
         "README*",
-        "LICENSE*"
+        "LICENSE*",
+        "CHANGELOG*"
       ],
       maintainers: ["Filipe Cabaço"],
       licenses: ["MIT"],
@@ -55,10 +55,11 @@ defmodule Francis.MixProject do
   defp deps do
     [
       {:bandit, "~> 1.0"},
+      {:plug, "~> 1.18"},
       {:jason, "~> 1.4"},
       {:websock, "~> 0.5"},
       {:websock_adapter, "~> 0.5"},
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:req, "~> 0.5", only: [:test]},
       {:websockex, "~> 0.4", only: [:test]},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

@@ -105,6 +105,31 @@ defmodule Mix.Tasks.Francis.ReleaseTest do
     assert File.exists?(@dockerignore)
   end
 
+  test "raises on invalid elixir version format" do
+    assert_raise Mix.Error, ~r/Invalid Elixir version format/, fn ->
+      capture_io(fn ->
+        Release.run(["--elixir-version", "1.18\"; RUN malicious #"])
+      end)
+    end
+  end
+
+  test "raises on invalid otp version format" do
+    assert_raise Mix.Error, ~r/Invalid OTP version format/, fn ->
+      capture_io(fn ->
+        Release.run(["--otp-version", "bad-version"])
+      end)
+    end
+  end
+
+  test "accepts valid two-segment version" do
+    capture_io(fn ->
+      Release.run(["--elixir-version", "1.18"])
+    end)
+
+    dockerfile = File.read!(@dockerfile)
+    assert dockerfile =~ "ARG ELIXIR_VERSION=1.18"
+  end
+
   defp strip_ansi(str) do
     Regex.replace(~r/\e\[[\d;]*m/, str, "")
   end

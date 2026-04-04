@@ -2,9 +2,27 @@ defmodule Francis.Websocket do
   @moduledoc false
   # Helper functions for WebSocket handlers to reduce complexity in generated modules
 
+  @type ws_state :: %{
+          id: binary(),
+          transport: pid(),
+          path: binary(),
+          params: map(),
+          heartbeat_interval: non_neg_integer() | nil,
+          heartbeat_timer: reference() | nil
+        }
+
+  @type ws_response ::
+          {:push, [{:text | :binary | :ping | :pong, binary()}], ws_state()}
+          | {:ok, ws_state()}
+          | {:stop, :error, ws_state()}
+
   @doc """
   Formats a WebSocket response for the WebSock protocol.
   """
+  @spec format_response(
+          {:reply, binary() | map() | list() | {atom(), any()}} | :noreply | :ok,
+          ws_state()
+        ) :: ws_response()
   def format_response({:reply, {type, msg}}, state) when type in [:text, :binary, :ping, :pong],
     do: {:push, [{type, msg}], state}
 
@@ -20,6 +38,7 @@ defmodule Francis.Websocket do
   @doc """
   Sets up the heartbeat timer if configured.
   """
+  @spec setup_heartbeat(ws_state()) :: ws_state()
   def setup_heartbeat(state) do
     case Map.get(state, :heartbeat_interval) do
       interval when is_integer(interval) and interval > 0 ->
@@ -34,6 +53,7 @@ defmodule Francis.Websocket do
   @doc """
   Reschedules the heartbeat timer and returns a ping frame.
   """
+  @spec handle_heartbeat(ws_state()) :: ws_response()
   def handle_heartbeat(state) do
     case Map.get(state, :heartbeat_timer) do
       timer when is_reference(timer) ->
@@ -50,6 +70,7 @@ defmodule Francis.Websocket do
   @doc """
   Cancels the heartbeat timer during termination.
   """
+  @spec cancel_heartbeat(ws_state()) :: non_neg_integer() | false | :ok
   def cancel_heartbeat(state) do
     case Map.get(state, :heartbeat_timer) do
       timer when is_reference(timer) -> Process.cancel_timer(timer)
@@ -60,6 +81,7 @@ defmodule Francis.Websocket do
   @doc """
   Safely calls a handler for :join event, returning {:ok, state} on error.
   """
+  @spec call_join(function(), ws_state()) :: ws_response()
   def call_join(handler, state) do
     handler.(:join, state) |> format_response(state)
   rescue
@@ -69,6 +91,7 @@ defmodule Francis.Websocket do
   @doc """
   Safely calls a handler for :close event, returning :ok on error.
   """
+  @spec call_close(function(), {:close, term()}, ws_state()) :: :ok
   def call_close(handler, event, state) do
     handler.(event, state)
     :ok

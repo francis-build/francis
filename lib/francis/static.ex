@@ -19,6 +19,7 @@ defmodule Francis.Static do
       iex> Francis.Static.static_path("app.css")
       "app-a1b2c3d4.css"
   """
+  @spec static_path(String.t(), String.t(), String.t()) :: String.t()
   def static_path(logical_path, base_path \\ "/", manifest_path \\ @default_manifest_path) do
     case load_manifest(manifest_path) do
       {:ok, manifest} ->
@@ -42,6 +43,7 @@ defmodule Francis.Static do
       iex> Francis.Static.exists?("nonexistent.css")
       false
   """
+  @spec exists?(String.t(), String.t()) :: boolean()
   def exists?(logical_path, manifest_path \\ @default_manifest_path) do
     case load_manifest(manifest_path) do
       {:ok, manifest} ->
@@ -66,6 +68,7 @@ defmodule Francis.Static do
         }
       }
   """
+  @spec all(String.t()) :: map()
   def all(manifest_path \\ @default_manifest_path) do
     case load_manifest(manifest_path) do
       {:ok, manifest} ->
@@ -89,6 +92,7 @@ defmodule Francis.Static do
       iex> Francis.Static.load_manifest("nonexistent.json")
       {:error, :enoent}
   """
+  @spec load_manifest(String.t()) :: {:ok, map()} | {:error, term()}
   def load_manifest(manifest_path \\ @default_manifest_path) do
     with {:ok, content} <- File.read(manifest_path) do
       Jason.decode(content)

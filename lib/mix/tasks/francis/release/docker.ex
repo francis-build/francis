@@ -77,6 +77,9 @@ defmodule Mix.Tasks.Francis.Release.Docker do
     {elixir_version, args} = Keyword.pop(args, :elixir_version, "1.18.4")
     {otp_version, []} = Keyword.pop(args, :otp_version, "27.3.4")
 
+    validate_version!("Elixir", elixir_version)
+    validate_version!("OTP", otp_version)
+
     docker_file =
       EEx.eval_string(@dockerfile_template,
         assigns: [app: app, port: port, elixir_version: elixir_version, otp_version: otp_version]
@@ -88,5 +91,11 @@ defmodule Mix.Tasks.Francis.Release.Docker do
     Mix.Generator.create_file(".dockerignore", docker_ignore)
 
     :ok
+  end
+
+  defp validate_version!(label, version) do
+    unless Regex.match?(~r/^\d+\.\d+(\.\d+)?$/, version) do
+      Mix.raise("Invalid #{label} version format: #{version}. Expected format: X.Y or X.Y.Z")
+    end
   end
 end
