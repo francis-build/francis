@@ -572,6 +572,364 @@ defmodule FrancisE2ETest do
     end
   end
 
+  describe "e2e: complex HTML pages" do
+    @tag :capture_log
+    test "html/2 serves a full HTML document with nested elements", %{port: port} do
+      page = """
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <title>Test Page</title>
+        <style>
+          body { font-family: sans-serif; margin: 0; }
+          .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+          nav a { color: #007bff; text-decoration: none; }
+          nav a:hover { text-decoration: underline; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #dee2e6; padding: .5rem; text-align: left; }
+          footer { margin-top: 2rem; color: #6c757d; font-size: .875rem; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <nav>
+            <a href="/">Home</a> | <a href="/about">About</a> | <a href="/contact">Contact</a>
+          </nav>
+          <h1>Dashboard</h1>
+          <p>Welcome back, <strong>User</strong>!</p>
+          <form action="/search" method="get">
+            <input type="text" name="q" placeholder="Search&hellip;" required>
+            <button type="submit">Go</button>
+          </form>
+          <table>
+            <thead><tr><th>ID</th><th>Name</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>Item A</td><td>Active</td></tr>
+              <tr><td>2</td><td>Item B</td><td>Pending</td></tr>
+              <tr><td>3</td><td>Item C &amp; D</td><td>Done</td></tr>
+            </tbody>
+          </table>
+          <footer>&copy; 2026 Test App. All rights reserved.</footer>
+        </div>
+        <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            console.log('page loaded');
+            var rows = document.querySelectorAll('tr');
+            rows.forEach(function(r) { r.addEventListener('click', function() {}); });
+          });
+        </script>
+      </body>
+      </html>
+      """
+
+      handler =
+        quote do
+          get("/", fn conn -> html(conn, unquote(page)) end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/")
+
+      assert response.status == 200
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+
+      # Verify the full document structure survived the round-trip
+      assert response.body =~ "<!DOCTYPE html>"
+      assert response.body =~ "<html lang=\"en\">"
+      assert response.body =~ "<meta charset=\"utf-8\">"
+      assert response.body =~ "<style>"
+      assert response.body =~ "border-collapse: collapse"
+      assert response.body =~ "<nav>"
+      assert response.body =~ "<form action=\"/search\" method=\"get\">"
+      assert response.body =~ "placeholder=\"Search&hellip;\""
+      assert response.body =~ "<table>"
+      assert response.body =~ "<th>ID</th><th>Name</th><th>Status</th>"
+      assert response.body =~ "Item C &amp; D"
+      assert response.body =~ "<script>"
+      assert response.body =~ "document.addEventListener('DOMContentLoaded'"
+      assert response.body =~ "&copy; 2026 Test App"
+      assert response.body =~ "</html>"
+    end
+
+    @tag :capture_log
+    test "safe_html escapes user content without mangling surrounding HTML", %{port: port} do
+      handler =
+        quote do
+          get("/", fn conn ->
+            # Simulate building a page with user-controlled input
+            user_name = "<script>alert('xss')</script>"
+            user_bio = "I like coding & \"testing\" things"
+            user_url = "https://example.com/?a=1&b=2"
+
+            escaped_name = Francis.HTML.escape(user_name)
+            escaped_bio = Francis.HTML.escape(user_bio)
+            escaped_url = Francis.HTML.escape(user_url)
+
+            page = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Profile</title></head>
+            <body>
+              <h1>#{escaped_name}</h1>
+              <p class="bio">#{escaped_bio}</p>
+              <a href="#{escaped_url}">Website</a>
+              <img src="/avatar.png" alt="#{escaped_name}">
+              <form action="/update" method="post">
+                <input type="hidden" name="name" value="#{escaped_name}">
+                <textarea>#{escaped_bio}</textarea>
+                <button type="submit">Save</button>
+              </form>
+            </body>
+            </html>
+            """
+
+            html(conn, page)
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/")
+
+      assert response.status == 200
+
+      # Script tag in user input is escaped
+      refute response.body =~ "<script>alert"
+      assert response.body =~ "&lt;script&gt;alert"
+
+      # Quotes and ampersands in user content are escaped
+      assert response.body =~ "I like coding &amp; &quot;testing&quot; things"
+      assert response.body =~ "https://example.com/?a=1&amp;b=2"
+
+      # But the structural HTML is NOT escaped — it renders properly
+      assert response.body =~ "<!DOCTYPE html>"
+      assert response.body =~ "<html>"
+      assert response.body =~ "<h1>"
+      assert response.body =~ "<p class=\"bio\">"
+      assert response.body =~ "<a href=\""
+      assert response.body =~ "<img src=\"/avatar.png\""
+      assert response.body =~ "<form action=\"/update\" method=\"post\">"
+      assert response.body =~ "<textarea>"
+      assert response.body =~ "<button type=\"submit\">Save</button>"
+      assert response.body =~ "</html>"
+    end
+
+    @tag :capture_log
+    test "error page renders full HTML document", %{port: port} do
+      handler =
+        quote do
+          get("/", fn _ -> "home" end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/missing", retry: false)
+
+      assert response.status == 404
+      # Verify the error page is a complete, well-formed HTML document
+      assert response.body =~ "<!DOCTYPE html>"
+      assert response.body =~ "<html lang=\"en\">"
+      assert response.body =~ "<meta charset=\"utf-8\">"
+      assert response.body =~ "<meta name=\"viewport\""
+      assert response.body =~ "<title>404"
+      assert response.body =~ "<style>"
+      assert response.body =~ "Not Found"
+      assert response.body =~ "</html>"
+    end
+  end
+
+  describe "e2e: WebSocket" do
+    @tag :capture_log
+    test "echo server over real WebSocket connection", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            {:reply, "echo: #{message}"}
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      WebSockex.send_frame(tester_pid, {:text, "hello"})
+      assert_receive {:client, "echo: hello"}, 2000
+
+      WebSockex.send_frame(tester_pid, {:text, "world"})
+      assert_receive {:client, "echo: world"}, 2000
+    end
+
+    @tag :capture_log
+    test "join event fires on WebSocket connect", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn
+            :join, socket ->
+              {:reply, %{event: "welcome", id: socket.id}}
+
+            {:received, message}, _socket ->
+              {:reply, message}
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      _tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      assert_receive {:client, %{"event" => "welcome", "id" => id}}, 2000
+      assert is_binary(id)
+    end
+
+    @tag :capture_log
+    test "WebSocket sends JSON replies for maps", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, _socket ->
+            {:reply, %{received: message, status: "ok"}}
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      WebSockex.send_frame(tester_pid, {:text, "ping"})
+
+      assert_receive {:client, %{"received" => "ping", "status" => "ok"}}, 2000
+    end
+
+    @tag :capture_log
+    test "WebSocket transport forwarding works", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn {:received, message}, socket ->
+            send(socket.transport, "broadcast: #{message}")
+            {:reply, "ack"}
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      WebSockex.send_frame(tester_pid, {:text, "hi"})
+
+      assert_receive {:client, "ack"}, 2000
+      assert_receive {:client, "broadcast: hi"}, 2000
+    end
+
+    @tag :capture_log
+    test "WebSocket close event fires cleanly", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          ws(unquote(path), fn
+            {:close, _reason}, _socket ->
+              send(unquote(parent_pid), {:lifecycle, :closed})
+              :ok
+
+            {:received, message}, _socket ->
+              {:reply, message}
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester, %{url: "ws://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+        )
+
+      # Verify connection works
+      WebSockex.send_frame(tester_pid, {:text, "alive"})
+      assert_receive {:client, "alive"}, 2000
+
+      # Close cleanly
+      WebSockex.send_frame(tester_pid, :close)
+      assert_receive {:lifecycle, :closed}, 2000
+    end
+
+    @tag :capture_log
+    test "WebSocket full lifecycle with path params", %{port: port} do
+      parent_pid = self()
+
+      handler =
+        quote do
+          ws("/chat/:room", fn
+            :join, socket ->
+              room = socket.params["room"]
+              {:reply, %{event: "joined", room: room}}
+
+            {:close, _reason}, _socket ->
+              send(unquote(parent_pid), {:lifecycle, :left})
+              :ok
+
+            {:received, message}, socket ->
+              room = socket.params["room"]
+              {:reply, %{room: room, message: message}}
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      tester_pid =
+        start_supervised!(
+          {Support.WsTester,
+           %{url: "ws://localhost:#{port}/chat/general", parent_pid: parent_pid}}
+        )
+
+      # Join event with room param
+      assert_receive {:client, %{"event" => "joined", "room" => "general"}}, 2000
+
+      # Message echoed with room context
+      WebSockex.send_frame(tester_pid, {:text, "hello everyone"})
+
+      assert_receive {:client, %{"room" => "general", "message" => "hello everyone"}},
+                     2000
+
+      # Clean close
+      WebSockex.send_frame(tester_pid, :close)
+      assert_receive {:lifecycle, :left}, 2000
+    end
+  end
+
   describe "e2e: HEAD requests" do
     @tag :capture_log
     test "HEAD returns headers but no body", %{port: port} do
