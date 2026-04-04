@@ -26,6 +26,10 @@ defmodule Francis do
   require Logger
   import Plug.Conn
 
+  @default_heartbeat_interval 30_000
+  @default_ws_timeout 60_000
+  @default_max_frame_size 65_536
+
   defmacro __using__(opts \\ []) do
     quote location: :keep do
       use Application
@@ -109,6 +113,9 @@ defmodule Francis do
         e -> handle_errors(conn, e)
       end
 
+      # Error handling chain: custom handler -> fallback to generic 500 page.
+      # If the custom error handler itself raises, we catch that and still
+      # return a 500 page to avoid crashing the connection.
       @spec handle_errors(Plug.Conn.t(), any()) :: Plug.Conn.t()
       @impl true
       def handle_errors(conn, reason) do
@@ -282,15 +289,17 @@ defmodule Francis do
           params: conn.params
         }
 
-        heartbeat_interval = Keyword.get(unquote(opts), :heartbeat_interval, 30_000)
+        heartbeat_interval =
+          Keyword.get(unquote(opts), :heartbeat_interval, unquote(@default_heartbeat_interval))
 
         conn
         |> var!()
         |> WebSockAdapter.upgrade(
           unquote(module_name),
           Map.put(socket_state, :heartbeat_interval, heartbeat_interval),
-          timeout: Keyword.get(unquote(opts), :timeout, 60_000),
-          max_frame_size: Keyword.get(unquote(opts), :max_frame_size, 65_536)
+          timeout: Keyword.get(unquote(opts), :timeout, unquote(@default_ws_timeout)),
+          max_frame_size:
+            Keyword.get(unquote(opts), :max_frame_size, unquote(@default_max_frame_size))
         )
         |> halt()
       end)
@@ -352,7 +361,7 @@ defmodule Francis do
   end
 
   @doc """
-  Defines an action for umatched routes and returns 404
+  Defines a catch-all action for unmatched routes (returns 404).
   """
   @spec unmatched((Plug.Conn.t() -> binary() | map() | Plug.Conn.t())) :: Macro.t()
   defmacro unmatched(handler) do

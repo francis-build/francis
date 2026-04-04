@@ -5,6 +5,8 @@ defmodule Francis.ResponseHandlers do
 
   import Plug.Conn
 
+  @html_cache_control "no-cache, no-store, must-revalidate"
+
   @doc """
   Redirects the connection to the specified path with a 302 status code.
 
@@ -184,8 +186,7 @@ defmodule Francis.ResponseHandlers do
   @spec html(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def html(conn, html) do
     conn
-    |> put_resp_content_type("text/html")
-    |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
+    |> put_html_headers()
     |> send_resp(200, html)
   end
 
@@ -214,8 +215,7 @@ defmodule Francis.ResponseHandlers do
   @spec html(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
   def html(conn, status, html) do
     conn
-    |> put_resp_content_type("text/html")
-    |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
+    |> put_html_headers()
     |> send_resp(status, html)
   end
 
@@ -241,8 +241,7 @@ defmodule Francis.ResponseHandlers do
   @spec safe_html(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def safe_html(conn, content) do
     conn
-    |> put_resp_content_type("text/html")
-    |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
+    |> put_html_headers()
     |> send_resp(200, Francis.HTML.escape(content))
   end
 
@@ -268,8 +267,13 @@ defmodule Francis.ResponseHandlers do
   @spec safe_html(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
   def safe_html(conn, status, content) do
     conn
-    |> put_resp_content_type("text/html")
-    |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
+    |> put_html_headers()
     |> send_resp(status, Francis.HTML.escape(content))
+  end
+
+  defp put_html_headers(conn) do
+    conn
+    |> put_resp_content_type("text/html")
+    |> put_resp_header("cache-control", @html_cache_control)
   end
 end

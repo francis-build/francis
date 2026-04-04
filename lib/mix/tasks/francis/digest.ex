@@ -45,8 +45,10 @@ defmodule Mix.Tasks.Francis.Digest do
   alias Mix.Tasks.Francis.Digest.Manifest
 
   @default_input_path "priv/static"
+  # 1 year in seconds — standard cache-control max-age for fingerprinted assets
   @default_age 31_536_000
   @digest_algorithm :sha256
+  # 12 hex chars = 48 bits of entropy, collision-safe for up to ~16M files
   @digest_length 12
 
   def run(args) do

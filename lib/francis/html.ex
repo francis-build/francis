@@ -47,9 +47,15 @@ defmodule Francis.HTML do
     IO.iodata_to_binary(escape_iodata(text, 0, text, []))
   end
 
-  # Efficient single-pass escaping that chunks runs of safe characters together.
-  # Tracks a skip count of safe bytes and only splits when hitting a special char,
-  # emitting the accumulated safe chunk as a single binary_part slice.
+  # Escapes in a single pass using chunked iodata accumulation.
+  #
+  # Instead of building one list element per byte, we track how many consecutive
+  # safe bytes we've seen (`skip`). When we hit a special character, we emit the
+  # safe run as a single `binary_part(original, 0, skip)` slice, followed by the
+  # replacement entity. Then `rest` becomes the new `original` and `skip` resets.
+  #
+  # This produces far fewer list elements than byte-by-byte for typical HTML
+  # where most characters are safe (e.g. "hello<world" = 2 chunks, not 11).
   defp escape_iodata(<<>>, 0, _original, acc), do: Enum.reverse(acc)
 
   defp escape_iodata(<<>>, skip, original, acc),

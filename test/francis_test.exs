@@ -954,7 +954,7 @@ defmodule FrancisTest do
         quote do
           plug(Support.PlugTester, to_assign: "plug1")
           plug(Support.PlugTester, to_assign: "plug2")
-          get("/", fn %{assigns: %{plug_assgined: plug_assgined}} -> plug_assgined end)
+          get("/", fn %{assigns: %{plug_assigned: plug_assigned}} -> plug_assigned end)
         end
 
       mod = Support.RouteTester.generate_module(handler)

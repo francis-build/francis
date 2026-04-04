@@ -6,9 +6,9 @@ defmodule Support.PlugTester do
   def init(opts), do: opts
 
   def call(%{assigns: assigns} = conn, to_assign: to_assign) do
-    case Map.get(assigns, :plug_assgined) do
-      nil -> assign(conn, :plug_assgined, [to_assign])
-      value -> assign(conn, :plug_assgined, value ++ [to_assign])
+    case Map.get(assigns, :plug_assigned) do
+      nil -> assign(conn, :plug_assigned, [to_assign])
+      value -> assign(conn, :plug_assigned, value ++ [to_assign])
     end
   end
 end
