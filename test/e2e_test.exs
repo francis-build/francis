@@ -930,6 +930,258 @@ defmodule FrancisE2ETest do
     end
   end
 
+  describe "e2e: DOM validation with Floki" do
+    @tag :capture_log
+    test "error page 404 has valid DOM structure", %{port: port} do
+      handler =
+        quote do
+          get("/", fn _ -> "home" end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/missing", retry: false)
+      {:ok, doc} = Floki.parse_document(response.body)
+
+      # Verify document structure
+      assert [{"html", _, _}] = Floki.find(doc, "html")
+      assert [{"head", _, _}] = Floki.find(doc, "head")
+      assert [{"body", _, _}] = Floki.find(doc, "body")
+
+      # Title contains status code
+      assert [{"title", _, _}] = Floki.find(doc, "title")
+      assert Floki.find(doc, "title") |> Floki.text() =~ "404"
+
+      # Meta tags present
+      assert [_ | _] = Floki.find(doc, "meta[charset]")
+      assert [_ | _] = Floki.find(doc, "meta[name='viewport']")
+
+      # Error content in correct elements
+      assert [{"h1", _, _}] = Floki.find(doc, "h1")
+      assert Floki.find(doc, "h1") |> Floki.text() =~ "Not Found"
+
+      assert [{"p", _, _}] = Floki.find(doc, "p")
+
+      # CSS is present
+      assert [_ | _] = Floki.find(doc, "style")
+
+      # Container structure
+      assert [{"div", _, _}] = Floki.find(doc, ".container")
+      assert [{"div", _, _}] = Floki.find(doc, ".status")
+      assert Floki.find(doc, ".status") |> Floki.text() =~ "404"
+    end
+
+    @tag :capture_log
+    test "error page 500 has valid DOM structure", %{port: port} do
+      handler =
+        quote do
+          get("/", fn _ -> raise "boom" end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/", retry: false)
+      {:ok, doc} = Floki.parse_document(response.body)
+
+      assert Floki.find(doc, "title") |> Floki.text() =~ "500"
+      assert Floki.find(doc, "h1") |> Floki.text() =~ "Internal Server Error"
+      assert Floki.find(doc, ".status") |> Floki.text() =~ "500"
+    end
+
+    @tag :capture_log
+    test "complex HTML page preserves full DOM tree", %{port: port} do
+      page = """
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <title>DOM Test</title>
+      </head>
+      <body>
+        <nav>
+          <a href="/">Home</a>
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+        </nav>
+        <main>
+          <h1>Dashboard</h1>
+          <p>Welcome, <strong>User</strong>!</p>
+          <table>
+            <thead><tr><th>ID</th><th>Name</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>Alpha</td></tr>
+              <tr><td>2</td><td>Beta</td></tr>
+            </tbody>
+          </table>
+          <form action="/search" method="get">
+            <input type="text" name="q" placeholder="Search">
+            <button type="submit">Go</button>
+          </form>
+        </main>
+        <footer>© 2026 Test</footer>
+      </body>
+      </html>
+      """
+
+      handler =
+        quote do
+          get("/", fn conn -> html(conn, unquote(page)) end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/")
+      {:ok, doc} = Floki.parse_document(response.body)
+
+      # Document structure
+      assert [{"html", [{"lang", "en"}], _}] = Floki.find(doc, "html")
+      assert [{"head", _, _}] = Floki.find(doc, "head")
+      assert [{"body", _, _}] = Floki.find(doc, "body")
+      assert [{"title", _, _}] = Floki.find(doc, "title")
+      assert Floki.find(doc, "title") |> Floki.text() == "DOM Test"
+
+      # Navigation links
+      nav_links = Floki.find(doc, "nav a")
+      assert length(nav_links) == 3
+      assert Floki.attribute(nav_links, "href") == ["/", "/about", "/contact"]
+
+      # Main content
+      assert Floki.find(doc, "h1") |> Floki.text() == "Dashboard"
+      assert Floki.find(doc, "p strong") |> Floki.text() == "User"
+
+      # Table structure
+      headers = Floki.find(doc, "thead th")
+      assert length(headers) == 2
+      assert Enum.map(headers, &Floki.text/1) == ["ID", "Name"]
+
+      rows = Floki.find(doc, "tbody tr")
+      assert length(rows) == 2
+
+      cells = Floki.find(doc, "tbody td")
+      assert Enum.map(cells, &Floki.text/1) == ["1", "Alpha", "2", "Beta"]
+
+      # Form
+      assert [{"form", attrs, _}] = Floki.find(doc, "form")
+      assert {"action", "/search"} in attrs
+      assert {"method", "get"} in attrs
+      assert [{"input", _, _}] = Floki.find(doc, "input[name='q']")
+      assert [{"button", _, _}] = Floki.find(doc, "button[type='submit']")
+
+      # Footer
+      assert Floki.find(doc, "footer") |> Floki.text() =~ "2026 Test"
+    end
+
+    @tag :capture_log
+    test "escaped user input doesn't create DOM elements", %{port: port} do
+      handler =
+        quote do
+          get("/", fn conn ->
+            user_input = "<script>alert('xss')</script>"
+            escaped = Francis.HTML.escape(user_input)
+
+            page = """
+            <html>
+            <body>
+              <div id="content">#{escaped}</div>
+            </body>
+            </html>
+            """
+
+            html(conn, page)
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/")
+      {:ok, doc} = Floki.parse_document(response.body)
+
+      # The escaped content should NOT create a script element in the DOM
+      assert Floki.find(doc, "script") == []
+
+      # The content div should exist and contain the escaped text
+      assert [{"div", [{"id", "content"}], _}] = Floki.find(doc, "#content")
+      text = Floki.find(doc, "#content") |> Floki.text()
+      assert text =~ "alert('xss')"
+    end
+
+    @tag :capture_log
+    test "multiple escaped attributes don't break DOM structure", %{port: port} do
+      handler =
+        quote do
+          get("/", fn conn ->
+            name = Francis.HTML.escape("O'Reilly & \"Sons\"")
+            bio = Francis.HTML.escape("<b>bold</b> & <i>italic</i>")
+
+            page = """
+            <html>
+            <body>
+              <div id="profile">
+                <h2 class="name">#{name}</h2>
+                <p class="bio">#{bio}</p>
+                <input type="text" value="#{name}">
+              </div>
+            </body>
+            </html>
+            """
+
+            html(conn, page)
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/")
+      {:ok, doc} = Floki.parse_document(response.body)
+
+      # DOM structure is intact
+      assert [{"div", [{"id", "profile"}], _}] = Floki.find(doc, "#profile")
+      assert [{"h2", [{"class", "name"}], _}] = Floki.find(doc, "h2.name")
+      assert [{"p", [{"class", "bio"}], _}] = Floki.find(doc, "p.bio")
+
+      # Escaped content didn't create extra DOM nodes
+      assert Floki.find(doc, "b") == []
+      assert Floki.find(doc, "i") == []
+
+      # Text content is readable (Floki decodes entities)
+      assert Floki.find(doc, "h2.name") |> Floki.text() =~ "O'Reilly"
+      assert Floki.find(doc, "p.bio") |> Floki.text() =~ "bold"
+    end
+
+    @tag :capture_log
+    test "security headers + CSP with Floki-validated error page", %{port: port} do
+      handler =
+        quote do
+          plug(Francis.Plug.SecureHeaders)
+          plug(Francis.Plug.CSP)
+          get("/", fn _ -> "home" end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/nope", retry: false)
+
+      assert response.status == 404
+
+      # Validate headers
+      assert response.headers["x-content-type-options"] == ["nosniff"]
+      [csp] = response.headers["content-security-policy"]
+      assert csp =~ "default-src 'self'"
+
+      # Validate DOM of error page
+      {:ok, doc} = Floki.parse_document(response.body)
+      assert [{"html", [{"lang", "en"}], _}] = Floki.find(doc, "html")
+      assert Floki.find(doc, "h1") |> Floki.text() =~ "Not Found"
+      assert [_ | _] = Floki.find(doc, "style")
+    end
+  end
+
   describe "e2e: HEAD requests" do
     @tag :capture_log
     test "HEAD returns headers but no body", %{port: port} do
