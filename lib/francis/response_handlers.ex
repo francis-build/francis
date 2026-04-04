@@ -169,7 +169,8 @@ defmodule Francis.ResponseHandlers do
 
   **Warning:** The following function does **not** escape HTML content.
   Passing user-generated or untrusted input may result in [Cross-Site Scripting (XSS)](https://owasp.org/www-community/attacks/xss/) vulnerabilities.
-  Only use this function with trusted, static HTML content. Look into `Francis.HTML.escape/1` for escaping untrusted content,
+  Only use this function with trusted, static HTML content.
+  Use `Francis.HTML.escape/1` for escaping untrusted content,
   or use `safe_html/2` which escapes content automatically.
 
   ## Examples

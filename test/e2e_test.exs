@@ -1,14 +1,7 @@
 defmodule FrancisE2ETest do
-  @moduledoc """
-  End-to-end tests that boot a real Bandit HTTP server and make actual
-  HTTP requests over the network, exercising the full request/response
-  lifecycle including middleware, headers, and error handling.
-  """
   use ExUnit.Case
 
   @moduletag :e2e
-
-  import ExUnit.CaptureLog
 
   setup do
     port = Enum.random(10_000..20_000)
@@ -42,9 +35,9 @@ defmodule FrancisE2ETest do
       response = Req.get!("http://localhost:#{port}/")
 
       assert response.status == 200
-      assert Req.Response.get_header(response, "content-type") == ["text/html; charset=utf-8"]
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
 
-      assert Req.Response.get_header(response, "cache-control") == [
+      assert response.headers["cache-control"] == [
                "no-cache, no-store, must-revalidate"
              ]
 
@@ -64,9 +57,9 @@ defmodule FrancisE2ETest do
       response = Req.get!("http://localhost:#{port}/")
 
       assert response.status == 201
-      assert Req.Response.get_header(response, "content-type") == ["text/html; charset=utf-8"]
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
 
-      assert Req.Response.get_header(response, "cache-control") == [
+      assert response.headers["cache-control"] == [
                "no-cache, no-store, must-revalidate"
              ]
     end
@@ -86,7 +79,7 @@ defmodule FrancisE2ETest do
       response = Req.get!("http://localhost:#{port}/")
 
       assert response.status == 200
-      assert Req.Response.get_header(response, "content-type") == ["text/html; charset=utf-8"]
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
       assert response.body == "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"
       refute response.body =~ "<script>"
     end
@@ -126,15 +119,15 @@ defmodule FrancisE2ETest do
       response = Req.get!("http://localhost:#{port}/")
 
       assert response.status == 200
-      assert Req.Response.get_header(response, "x-content-type-options") == ["nosniff"]
-      assert Req.Response.get_header(response, "x-frame-options") == ["DENY"]
-      assert Req.Response.get_header(response, "x-xss-protection") == ["1; mode=block"]
+      assert response.headers["x-content-type-options"] == ["nosniff"]
+      assert response.headers["x-frame-options"] == ["DENY"]
+      assert response.headers["x-xss-protection"] == ["1; mode=block"]
 
-      assert Req.Response.get_header(response, "referrer-policy") == [
+      assert response.headers["referrer-policy"] == [
                "strict-origin-when-cross-origin"
              ]
 
-      assert Req.Response.get_header(response, "permissions-policy") == [
+      assert response.headers["permissions-policy"] == [
                "camera=(), microphone=(), geolocation=()"
              ]
     end
@@ -147,7 +140,7 @@ defmodule FrancisE2ETest do
             headers: %{"x-frame-options" => "SAMEORIGIN", "x-custom" => "my-value"}
           )
 
-          get("/", fn conn -> "ok" end)
+          get("/", fn _ -> "ok" end)
         end
 
       mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
@@ -155,10 +148,10 @@ defmodule FrancisE2ETest do
 
       response = Req.get!("http://localhost:#{port}/")
 
-      assert Req.Response.get_header(response, "x-frame-options") == ["SAMEORIGIN"]
-      assert Req.Response.get_header(response, "x-custom") == ["my-value"]
+      assert response.headers["x-frame-options"] == ["SAMEORIGIN"]
+      assert response.headers["x-custom"] == ["my-value"]
       # defaults still present
-      assert Req.Response.get_header(response, "x-content-type-options") == ["nosniff"]
+      assert response.headers["x-content-type-options"] == ["nosniff"]
     end
 
     @tag :capture_log
@@ -175,8 +168,8 @@ defmodule FrancisE2ETest do
       response = Req.get!("http://localhost:#{port}/api")
 
       assert response.status == 200
-      assert Req.Response.get_header(response, "x-content-type-options") == ["nosniff"]
-      assert Req.Response.get_header(response, "x-frame-options") == ["DENY"]
+      assert response.headers["x-content-type-options"] == ["nosniff"]
+      assert response.headers["x-frame-options"] == ["DENY"]
     end
   end
 
@@ -194,7 +187,7 @@ defmodule FrancisE2ETest do
 
       response = Req.get!("http://localhost:#{port}/")
 
-      [csp] = Req.Response.get_header(response, "content-security-policy")
+      [csp] = response.headers["content-security-policy"]
       assert csp =~ "default-src 'self'"
       assert csp =~ "script-src 'self'"
       assert csp =~ "object-src 'none'"
@@ -212,7 +205,7 @@ defmodule FrancisE2ETest do
             }
           )
 
-          get("/", fn conn -> "ok" end)
+          get("/", fn _ -> "ok" end)
         end
 
       mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
@@ -220,7 +213,7 @@ defmodule FrancisE2ETest do
 
       response = Req.get!("http://localhost:#{port}/")
 
-      [csp] = Req.Response.get_header(response, "content-security-policy")
+      [csp] = response.headers["content-security-policy"]
       assert csp =~ "script-src 'self' https://cdn.example.com"
       assert csp =~ "connect-src 'self' https://api.example.com"
       # defaults still present
@@ -232,7 +225,7 @@ defmodule FrancisE2ETest do
       handler =
         quote do
           plug(Francis.Plug.CSP, report_only: true)
-          get("/", fn conn -> "ok" end)
+          get("/", fn _ -> "ok" end)
         end
 
       mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
@@ -240,8 +233,8 @@ defmodule FrancisE2ETest do
 
       response = Req.get!("http://localhost:#{port}/")
 
-      assert Req.Response.get_header(response, "content-security-policy-report-only") != []
-      assert Req.Response.get_header(response, "content-security-policy") == []
+      assert response.headers["content-security-policy-report-only"] != []
+      assert response.headers["content-security-policy"] == []
     end
   end
 
@@ -259,7 +252,7 @@ defmodule FrancisE2ETest do
       response = Req.get!("http://localhost:#{port}/nonexistent", retry: false)
 
       assert response.status == 404
-      assert Req.Response.get_header(response, "content-type") == ["text/html; charset=utf-8"]
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
       assert response.body =~ "<!DOCTYPE html>"
       assert response.body =~ "404"
       assert response.body =~ "Not Found"
@@ -278,7 +271,7 @@ defmodule FrancisE2ETest do
       response = Req.get!("http://localhost:#{port}/", retry: false)
 
       assert response.status == 500
-      assert Req.Response.get_header(response, "content-type") == ["text/html; charset=utf-8"]
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
       assert response.body =~ "<!DOCTYPE html>"
       assert response.body =~ "Internal Server Error"
     end
@@ -332,22 +325,22 @@ defmodule FrancisE2ETest do
       assert response.body == "<h1>Fully Secured</h1>"
 
       # Security headers
-      assert Req.Response.get_header(response, "x-content-type-options") == ["nosniff"]
-      assert Req.Response.get_header(response, "x-frame-options") == ["DENY"]
-      assert Req.Response.get_header(response, "x-xss-protection") == ["1; mode=block"]
+      assert response.headers["x-content-type-options"] == ["nosniff"]
+      assert response.headers["x-frame-options"] == ["DENY"]
+      assert response.headers["x-xss-protection"] == ["1; mode=block"]
 
-      assert Req.Response.get_header(response, "referrer-policy") == [
+      assert response.headers["referrer-policy"] == [
                "strict-origin-when-cross-origin"
              ]
 
       # CSP header
-      [csp] = Req.Response.get_header(response, "content-security-policy")
+      [csp] = response.headers["content-security-policy"]
       assert csp =~ "default-src 'self'"
 
       # HTML-specific headers
-      assert Req.Response.get_header(response, "content-type") == ["text/html; charset=utf-8"]
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
 
-      assert Req.Response.get_header(response, "cache-control") == [
+      assert response.headers["cache-control"] == [
                "no-cache, no-store, must-revalidate"
              ]
     end
@@ -375,8 +368,8 @@ defmodule FrancisE2ETest do
       assert response.body =~ "&lt;script&gt;"
 
       # All security headers present
-      assert Req.Response.get_header(response, "x-content-type-options") == ["nosniff"]
-      [csp] = Req.Response.get_header(response, "content-security-policy")
+      assert response.headers["x-content-type-options"] == ["nosniff"]
+      [csp] = response.headers["content-security-policy"]
       assert csp =~ "script-src 'self'"
     end
 
@@ -398,9 +391,9 @@ defmodule FrancisE2ETest do
       assert response.body =~ "Not Found"
 
       # Security headers should still be set by the plug pipeline
-      assert Req.Response.get_header(response, "x-content-type-options") == ["nosniff"]
-      assert Req.Response.get_header(response, "x-frame-options") == ["DENY"]
-      [csp] = Req.Response.get_header(response, "content-security-policy")
+      assert response.headers["x-content-type-options"] == ["nosniff"]
+      assert response.headers["x-frame-options"] == ["DENY"]
+      [csp] = response.headers["content-security-policy"]
       assert csp =~ "default-src 'self'"
     end
   end
@@ -478,30 +471,30 @@ defmodule FrancisE2ETest do
       html_resp = Req.get!("http://localhost:#{port}/html")
       assert html_resp.status == 200
       assert html_resp.body == "<h1>HTML Page</h1>"
-      assert Req.Response.get_header(html_resp, "content-type") == ["text/html; charset=utf-8"]
+      assert html_resp.headers["content-type"] == ["text/html; charset=utf-8"]
 
-      assert Req.Response.get_header(html_resp, "cache-control") == [
+      assert html_resp.headers["cache-control"] == [
                "no-cache, no-store, must-revalidate"
              ]
 
-      assert Req.Response.get_header(html_resp, "x-content-type-options") == ["nosniff"]
+      assert html_resp.headers["x-content-type-options"] == ["nosniff"]
 
       # JSON route
       json_resp = Req.get!("http://localhost:#{port}/json")
       assert json_resp.status == 200
       assert json_resp.body == %{"message" => "hello"}
 
-      assert Req.Response.get_header(json_resp, "content-type") == [
+      assert json_resp.headers["content-type"] == [
                "application/json; charset=utf-8"
              ]
 
-      assert Req.Response.get_header(json_resp, "x-content-type-options") == ["nosniff"]
+      assert json_resp.headers["x-content-type-options"] == ["nosniff"]
 
       # Text route
       text_resp = Req.get!("http://localhost:#{port}/text")
       assert text_resp.status == 200
       assert text_resp.body == "plain text"
-      assert Req.Response.get_header(text_resp, "content-type") == ["text/plain; charset=utf-8"]
+      assert text_resp.headers["content-type"] == ["text/plain; charset=utf-8"]
 
       # Safe HTML route
       safe_resp = Req.get!("http://localhost:#{port}/safe")
@@ -557,7 +550,7 @@ defmodule FrancisE2ETest do
       response = Req.get!("http://localhost:#{port}/old", redirect: false)
 
       assert response.status == 302
-      assert Req.Response.get_header(response, "location") == ["/new"]
+      assert response.headers["location"] == ["/new"]
     end
 
     @tag :capture_log
@@ -595,8 +588,8 @@ defmodule FrancisE2ETest do
 
       assert response.status == 200
       assert response.body == ""
-      assert Req.Response.get_header(response, "content-type") == ["text/html; charset=utf-8"]
-      assert Req.Response.get_header(response, "x-content-type-options") == ["nosniff"]
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.headers["x-content-type-options"] == ["nosniff"]
     end
   end
 end

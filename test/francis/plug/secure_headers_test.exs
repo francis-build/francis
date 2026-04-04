@@ -34,7 +34,7 @@ defmodule Francis.Plug.SecureHeadersTest do
       handler =
         quote do
           plug(Francis.Plug.SecureHeaders)
-          get("/", fn conn -> "ok" end)
+          get("/", fn _ -> "ok" end)
         end
 
       mod = Support.RouteTester.generate_module(handler)
@@ -51,7 +51,7 @@ defmodule Francis.Plug.SecureHeadersTest do
       handler =
         quote do
           plug(Francis.Plug.SecureHeaders, headers: %{"x-frame-options" => "SAMEORIGIN"})
-          get("/", fn conn -> "ok" end)
+          get("/", fn _ -> "ok" end)
         end
 
       mod = Support.RouteTester.generate_module(handler)

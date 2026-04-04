@@ -62,7 +62,9 @@ defmodule Francis.ErrorPage do
     <title>#{status} — #{Francis.HTML.escape(title)}</title>
     <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8f9fa;color:#212529}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;background:#f8f9fa;color:#212529}
     .container{text-align:center;padding:2rem}
     .status{font-size:6rem;font-weight:700;color:#dee2e6;line-height:1}
     h1{font-size:1.5rem;margin:1rem 0 .5rem}

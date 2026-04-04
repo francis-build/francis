@@ -35,7 +35,7 @@ defmodule Francis.Plug.CSPTest do
       handler =
         quote do
           plug(Francis.Plug.CSP)
-          get("/", fn conn -> "ok" end)
+          get("/", fn _ -> "ok" end)
         end
 
       mod = Support.RouteTester.generate_module(handler)
@@ -51,7 +51,7 @@ defmodule Francis.Plug.CSPTest do
       handler =
         quote do
           plug(Francis.Plug.CSP, report_only: true)
-          get("/", fn conn -> "ok" end)
+          get("/", fn _ -> "ok" end)
         end
 
       mod = Support.RouteTester.generate_module(handler)
@@ -71,7 +71,7 @@ defmodule Francis.Plug.CSPTest do
             }
           )
 
-          get("/", fn conn -> "ok" end)
+          get("/", fn _ -> "ok" end)
         end
 
       mod = Support.RouteTester.generate_module(handler)
