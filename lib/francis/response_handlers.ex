@@ -8,6 +8,10 @@ defmodule Francis.ResponseHandlers do
   @doc """
   Redirects the connection to the specified path with a 302 status code.
 
+  Only relative paths are accepted. Absolute URLs (e.g. `http://...`) will raise
+  an `ArgumentError` to prevent open redirect vulnerabilities. Protocol-relative
+  URLs (e.g. `//evil.com`) are neutralized to `"/"`.
+
   ## Examples
 
   ```elixir
@@ -20,14 +24,18 @@ defmodule Francis.ResponseHandlers do
   """
   @spec redirect(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
   def redirect(conn, path) do
+    validated_path = validate_redirect_path(path)
+
     conn
-    |> put_resp_header("location", path)
+    |> put_resp_header("location", validated_path)
     |> send_resp(302, "")
     |> halt()
   end
 
   @doc """
   Redirects the connection to the specified path with a custom status code.
+
+  Only relative paths are accepted. See `redirect/2` for details on URL validation.
 
   ## Examples
 
@@ -41,10 +49,27 @@ defmodule Francis.ResponseHandlers do
   """
   @spec redirect(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
   def redirect(conn, status, path) do
+    validated_path = validate_redirect_path(path)
+
     conn
-    |> put_resp_header("location", path)
+    |> put_resp_header("location", validated_path)
     |> send_resp(status, "")
     |> halt()
+  end
+
+  defp validate_redirect_path("/" <> _ = path) do
+    case URI.parse(path) do
+      # Reject protocol-relative URLs like "//evil.com"
+      %URI{host: nil} -> path
+      _ -> "/"
+    end
+  end
+
+  defp validate_redirect_path(path) when is_binary(path) do
+    case URI.parse(path) do
+      %URI{scheme: nil, host: nil} -> path
+      _ -> raise ArgumentError, "redirect/2 only accepts relative paths, got: #{inspect(path)}"
+    end
   end
 
   @doc """

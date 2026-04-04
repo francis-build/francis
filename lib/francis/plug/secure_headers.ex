@@ -13,6 +13,7 @@ defmodule Francis.Plug.SecureHeaders do
     * `x-xss-protection: 1; mode=block` — Enables the browser's XSS filter
     * `referrer-policy: strict-origin-when-cross-origin` — Controls how much referrer info is sent
     * `permissions-policy: camera=(), microphone=(), geolocation=()` — Restricts browser features
+    * `strict-transport-security: max-age=63072000; includeSubDomains` — Enforces HTTPS connections
 
   ## Usage
 
@@ -39,7 +40,8 @@ defmodule Francis.Plug.SecureHeaders do
     "x-frame-options" => "DENY",
     "x-xss-protection" => "1; mode=block",
     "referrer-policy" => "strict-origin-when-cross-origin",
-    "permissions-policy" => "camera=(), microphone=(), geolocation=()"
+    "permissions-policy" => "camera=(), microphone=(), geolocation=()",
+    "strict-transport-security" => "max-age=63072000; includeSubDomains"
   }
 
   @impl true

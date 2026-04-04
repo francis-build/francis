@@ -130,6 +130,10 @@ defmodule FrancisE2ETest do
       assert response.headers["permissions-policy"] == [
                "camera=(), microphone=(), geolocation=()"
              ]
+
+      assert response.headers["strict-transport-security"] == [
+               "max-age=63072000; includeSubDomains"
+             ]
     end
 
     @tag :capture_log
@@ -569,6 +573,40 @@ defmodule FrancisE2ETest do
 
       assert response.status == 200
       assert response.body == "arrived at new"
+    end
+
+    @tag :capture_log
+    test "rejects absolute URL redirects over HTTP", %{port: port} do
+      handler =
+        quote do
+          get("/redir", fn conn -> redirect(conn, "http://evil.com/phish") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/redir", redirect: false, retry: false)
+
+      # Should get a 500 because the ArgumentError is raised
+      assert response.status == 500
+    end
+
+    @tag :capture_log
+    test "protocol-relative redirect is neutralized", %{port: port} do
+      handler =
+        quote do
+          get("/redir", fn conn -> redirect(conn, "//evil.com/phish") end)
+          get("/", fn _ -> "safe home" end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      start_supervised!(mod)
+
+      response = Req.get!("http://localhost:#{port}/redir", redirect: false)
+
+      assert response.status == 302
+      # Protocol-relative URL is neutralized to "/"
+      assert response.headers["location"] == ["/"]
     end
   end
 

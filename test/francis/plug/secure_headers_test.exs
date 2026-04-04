@@ -12,6 +12,7 @@ defmodule Francis.Plug.SecureHeadersTest do
       assert headers["x-xss-protection"] == "1; mode=block"
       assert headers["referrer-policy"] == "strict-origin-when-cross-origin"
       assert headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"
+      assert headers["strict-transport-security"] == "max-age=63072000; includeSubDomains"
     end
 
     test "merges custom headers with defaults" do

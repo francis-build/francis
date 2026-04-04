@@ -44,17 +44,35 @@ defmodule Francis.HTML do
   def escape(nil), do: ""
 
   def escape(text) when is_binary(text) do
-    IO.iodata_to_binary(escape_iodata(text, []))
+    IO.iodata_to_binary(escape_iodata(text, 0, text, []))
   end
 
-  # Efficient single-pass escaping using iodata accumulation
-  defp escape_iodata(<<>>, acc), do: Enum.reverse(acc)
-  defp escape_iodata(<<"&", rest::binary>>, acc), do: escape_iodata(rest, ["&amp;" | acc])
-  defp escape_iodata(<<"<", rest::binary>>, acc), do: escape_iodata(rest, ["&lt;" | acc])
-  defp escape_iodata(<<">", rest::binary>>, acc), do: escape_iodata(rest, ["&gt;" | acc])
-  defp escape_iodata(<<"\"", rest::binary>>, acc), do: escape_iodata(rest, ["&quot;" | acc])
-  defp escape_iodata(<<"'", rest::binary>>, acc), do: escape_iodata(rest, ["&#39;" | acc])
+  # Efficient single-pass escaping that chunks runs of safe characters together.
+  # Tracks a skip count of safe bytes and only splits when hitting a special char,
+  # emitting the accumulated safe chunk as a single binary_part slice.
+  defp escape_iodata(<<>>, 0, _original, acc), do: Enum.reverse(acc)
 
-  defp escape_iodata(<<char, rest::binary>>, acc),
-    do: escape_iodata(rest, [<<char>> | acc])
+  defp escape_iodata(<<>>, skip, original, acc),
+    do: Enum.reverse([binary_part(original, 0, skip) | acc])
+
+  for {char, replacement} <- [
+        {?&, "&amp;"},
+        {?<, "&lt;"},
+        {?>, "&gt;"},
+        {?", "&quot;"},
+        {?', "&#39;"}
+      ] do
+    defp escape_iodata(<<unquote(char), rest::binary>>, 0, _original, acc) do
+      escape_iodata(rest, 0, rest, [unquote(replacement) | acc])
+    end
+
+    defp escape_iodata(<<unquote(char), rest::binary>>, skip, original, acc) do
+      chunk = binary_part(original, 0, skip)
+      escape_iodata(rest, 0, rest, [unquote(replacement), chunk | acc])
+    end
+  end
+
+  defp escape_iodata(<<_char, rest::binary>>, skip, original, acc) do
+    escape_iodata(rest, skip + 1, original, acc)
+  end
 end

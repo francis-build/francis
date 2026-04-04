@@ -202,6 +202,7 @@ defmodule Francis do
 
   - `:timeout` - The timeout for the WebSocket connection in milliseconds (default: 60_000)
   - `:heartbeat_interval` - The interval in milliseconds between ping frames for heartbeat (default: 30_000). Set to `nil` to disable heartbeat.
+  - `:max_frame_size` - The maximum allowed size in bytes for incoming WebSocket frames (default: 65_536). Protects against memory exhaustion from oversized messages.
 
   ## Examples
 
@@ -288,7 +289,8 @@ defmodule Francis do
         |> WebSockAdapter.upgrade(
           unquote(module_name),
           Map.put(socket_state, :heartbeat_interval, heartbeat_interval),
-          timeout: Keyword.get(unquote(opts), :timeout, 60_000)
+          timeout: Keyword.get(unquote(opts), :timeout, 60_000),
+          max_frame_size: Keyword.get(unquote(opts), :max_frame_size, 65_536)
         )
         |> halt()
       end)

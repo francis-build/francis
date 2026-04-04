@@ -10,7 +10,7 @@ defmodule Francis.Plug.CSPTest do
       assert config.report_only == false
       assert config.policy =~ "default-src 'self'"
       assert config.policy =~ "script-src 'self'"
-      assert config.policy =~ "style-src 'self' 'unsafe-inline'"
+      assert config.policy =~ "style-src 'self'"
       assert config.policy =~ "img-src 'self' data:"
       assert config.policy =~ "object-src 'none'"
       assert config.policy =~ "frame-ancestors 'none'"

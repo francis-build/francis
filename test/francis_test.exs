@@ -690,17 +690,31 @@ defmodule FrancisTest do
       assert response.headers["location"] == ["/new_path"]
     end
 
-    test "redirects to the given URL" do
+    test "rejects absolute URLs to prevent open redirects" do
       handler =
         quote do
           get("/", fn conn -> redirect(conn, "http://example.com/new_path") end)
         end
 
       mod = Support.RouteTester.generate_module(handler)
+
+      assert_raise Plug.Conn.WrapperError, ~r/ArgumentError/, fn ->
+        Req.get!("/", plug: mod, redirect: false)
+      end
+    end
+
+    test "rejects protocol-relative URLs" do
+      handler =
+        quote do
+          get("/", fn conn -> redirect(conn, "//evil.com/phish") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
       response = Req.get!("/", plug: mod, redirect: false)
 
+      # Protocol-relative URLs starting with // are normalized to "/"
       assert response.status == 302
-      assert response.headers["location"] == ["http://example.com/new_path"]
+      assert response.headers["location"] == ["/"]
     end
   end
 
@@ -718,17 +732,17 @@ defmodule FrancisTest do
       assert response.headers["location"] == ["/new_path"]
     end
 
-    test "redirects to the given URL with custom status" do
+    test "rejects absolute URLs with custom status" do
       handler =
         quote do
           get("/", fn conn -> redirect(conn, 301, "http://example.com/new_path") end)
         end
 
       mod = Support.RouteTester.generate_module(handler)
-      response = Req.get!("/", plug: mod, redirect: false)
 
-      assert response.status == 301
-      assert response.headers["location"] == ["http://example.com/new_path"]
+      assert_raise Plug.Conn.WrapperError, ~r/ArgumentError/, fn ->
+        Req.get!("/", plug: mod, redirect: false)
+      end
     end
   end
 

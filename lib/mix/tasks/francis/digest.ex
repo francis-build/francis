@@ -47,7 +47,7 @@ defmodule Mix.Tasks.Francis.Digest do
   @default_input_path "priv/static"
   @default_age 31_536_000
   @digest_algorithm :sha256
-  @digest_length 8
+  @digest_length 12
 
   def run(args) do
     {opts, args} = parse_args(args)
@@ -64,7 +64,8 @@ defmodule Mix.Tasks.Francis.Digest do
 
     Mix.shell().info("Generating digested files from #{input_path} to #{output_path}")
 
-    files = collect_files(input_path, opts[:exclude] || [])
+    exclude_regexes = compile_exclude_patterns(opts[:exclude] || [])
+    files = collect_files(input_path, exclude_regexes)
     digested_files = Enum.map(files, &digest_file(&1, input_path, output_path, opts))
 
     manifest_path = Path.join(output_path, "cache_manifest.json")
@@ -107,34 +108,33 @@ defmodule Mix.Tasks.Francis.Digest do
     Keyword.put(opts, :exclude, exclude_patterns)
   end
 
-  defp collect_files(input_path, exclude_patterns) do
+  defp compile_exclude_patterns(patterns) do
+    Enum.flat_map(patterns, fn pattern ->
+      regex_pattern =
+        pattern
+        |> String.replace(".", "\\.")
+        |> String.replace("*", ".*")
+        |> String.replace("?", ".")
+        |> then(&("^" <> &1 <> "$"))
+
+      case Regex.compile(regex_pattern) do
+        {:ok, regex} -> [regex]
+        _ -> []
+      end
+    end)
+  end
+
+  defp collect_files(input_path, exclude_regexes) do
     input_path
     |> Path.join("**/*")
     |> Path.wildcard()
     |> Enum.filter(&File.regular?/1)
-    |> Enum.reject(&should_exclude?(&1, exclude_patterns))
+    |> Enum.reject(&should_exclude?(&1, exclude_regexes))
   end
 
-  defp should_exclude?(file_path, exclude_patterns) do
+  defp should_exclude?(file_path, exclude_regexes) do
     filename = Path.basename(file_path)
-
-    Enum.any?(exclude_patterns, fn pattern ->
-      match_pattern?(filename, pattern)
-    end)
-  end
-
-  defp match_pattern?(filename, pattern) do
-    regex_pattern =
-      pattern
-      |> String.replace(".", "\\.")
-      |> String.replace("*", ".*")
-      |> String.replace("?", ".")
-      |> then(&("^" <> &1 <> "$"))
-
-    case Regex.compile(regex_pattern) do
-      {:ok, regex} -> Regex.match?(regex, filename)
-      _ -> false
-    end
+    Enum.any?(exclude_regexes, &Regex.match?(&1, filename))
   end
 
   defp digest_file(file_path, input_path, output_path, opts) do

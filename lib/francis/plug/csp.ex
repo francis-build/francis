@@ -10,7 +10,7 @@ defmodule Francis.Plug.CSP do
   The default policy is restrictive and only allows resources from the same origin:
 
       default-src 'self'; script-src 'self';
-      style-src 'self' 'unsafe-inline'; img-src 'self' data:;
+      style-src 'self'; img-src 'self' data:;
       font-src 'self'; object-src 'none'; frame-ancestors 'none'
 
   ## Usage
@@ -40,7 +40,7 @@ defmodule Francis.Plug.CSP do
   @default_directives %{
     "default-src" => "'self'",
     "script-src" => "'self'",
-    "style-src" => "'self' 'unsafe-inline'",
+    "style-src" => "'self'",
     "img-src" => "'self' data:",
     "font-src" => "'self'",
     "object-src" => "'none'",
