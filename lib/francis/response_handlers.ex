@@ -140,7 +140,8 @@ defmodule Francis.ResponseHandlers do
 
   **Warning:** The following function does **not** escape HTML content.
   Passing user-generated or untrusted input may result in [Cross-Site Scripting (XSS)](https://owasp.org/www-community/attacks/xss/) vulnerabilities.
-  Only use this function with trusted, static HTML content. Look into [phoenix_html](https://github.com/phoenixframework/phoenix_html/)
+  Only use this function with trusted, static HTML content. Use `Francis.HTML.escape/1` for escaping untrusted content,
+  or use `safe_html/2` which escapes content automatically.
 
   ## Examples
 
@@ -159,6 +160,7 @@ defmodule Francis.ResponseHandlers do
   def html(conn, html) do
     conn
     |> put_resp_content_type("text/html")
+    |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
     |> send_resp(200, html)
   end
 
@@ -167,7 +169,8 @@ defmodule Francis.ResponseHandlers do
 
   **Warning:** The following function does **not** escape HTML content.
   Passing user-generated or untrusted input may result in [Cross-Site Scripting (XSS)](https://owasp.org/www-community/attacks/xss/) vulnerabilities.
-  Only use this function with trusted, static HTML content. Look into [phoenix_html](https://github.com/phoenixframework/phoenix_html/)
+  Only use this function with trusted, static HTML content. Look into `Francis.HTML.escape/1` for escaping untrusted content,
+  or use `safe_html/2` which escapes content automatically.
 
   ## Examples
 
@@ -186,6 +189,61 @@ defmodule Francis.ResponseHandlers do
   def html(conn, status, html) do
     conn
     |> put_resp_content_type("text/html")
+    |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
     |> send_resp(status, html)
+  end
+
+  @doc """
+  Sends an HTML response with a 200 status code, escaping the content to prevent XSS.
+
+  Unlike `html/2`, this function escapes all HTML special characters in the content,
+  making it safe for rendering untrusted or user-generated input.
+
+  ## Examples
+
+  ```elixir
+  defmodule Example do
+    use Francis
+
+    get("/", fn conn ->
+      user_input = conn.params["name"]
+      safe_html(conn, "<h1>Hello, \#{user_input}!</h1>")
+    end)
+  end
+  ```
+  """
+  @spec safe_html(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def safe_html(conn, content) do
+    conn
+    |> put_resp_content_type("text/html")
+    |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
+    |> send_resp(200, Francis.HTML.escape(content))
+  end
+
+  @doc """
+  Sends an HTML response with the given status code, escaping the content to prevent XSS.
+
+  Unlike `html/3`, this function escapes all HTML special characters in the content,
+  making it safe for rendering untrusted or user-generated input.
+
+  ## Examples
+
+  ```elixir
+  defmodule Example do
+    use Francis
+
+    get("/", fn conn ->
+      user_input = conn.params["name"]
+      safe_html(conn, 201, "<h1>Created: \#{user_input}</h1>")
+    end)
+  end
+  ```
+  """
+  @spec safe_html(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
+  def safe_html(conn, status, content) do
+    conn
+    |> put_resp_content_type("text/html")
+    |> put_resp_header("cache-control", "no-cache, no-store, must-revalidate")
+    |> send_resp(status, Francis.HTML.escape(content))
   end
 end

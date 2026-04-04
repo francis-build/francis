@@ -30,7 +30,11 @@ defmodule Francis.Plug.Router do
       rescue
         err ->
           Logger.error("Failed to match route: #{conn.method} #{conn.request_path}")
-          conn |> send_resp(404, "Not Found") |> halt()
+
+          conn
+          |> Plug.Conn.put_resp_content_type("text/html")
+          |> send_resp(404, Francis.ErrorPage.render(404))
+          |> halt()
       end
 
       @doc false

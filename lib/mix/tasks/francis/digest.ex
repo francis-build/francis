@@ -46,7 +46,7 @@ defmodule Mix.Tasks.Francis.Digest do
 
   @default_input_path "priv/static"
   @default_age 31_536_000
-  @digest_algorithm :md5
+  @digest_algorithm :sha256
   @digest_length 8
 
   def run(args) do

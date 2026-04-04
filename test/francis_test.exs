@@ -808,6 +808,18 @@ defmodule FrancisTest do
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
       assert response.body == "<h1>Hello, World!</h1>"
     end
+
+    test "sets cache-control header" do
+      handler =
+        quote do
+          get("/", fn conn -> html(conn, "<h1>Hello</h1>") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
+    end
   end
 
   describe "html/3" do
@@ -823,6 +835,74 @@ defmodule FrancisTest do
       assert response.status == 201
       assert response.headers["content-type"] == ["text/html; charset=utf-8"]
       assert response.body == "<h1>Hello, World!</h1>"
+    end
+
+    test "sets cache-control header" do
+      handler =
+        quote do
+          get("/", fn conn -> html(conn, 201, "<h1>Hello</h1>") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
+    end
+  end
+
+  describe "safe_html/2" do
+    test "returns an HTML response with 200 status and escapes content" do
+      handler =
+        quote do
+          get("/", fn conn -> safe_html(conn, "<script>alert('xss')</script>") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 200
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.body == "&lt;script&gt;alert(&#39;xss&#39;)&lt;/script&gt;"
+    end
+
+    test "sets cache-control header" do
+      handler =
+        quote do
+          get("/", fn conn -> safe_html(conn, "Hello") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
+    end
+  end
+
+  describe "safe_html/3" do
+    test "returns an HTML response with custom status and escapes content" do
+      handler =
+        quote do
+          get("/", fn conn -> safe_html(conn, 201, "<b>bold & \"quoted\"</b>") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 201
+      assert response.headers["content-type"] == ["text/html; charset=utf-8"]
+      assert response.body == "&lt;b&gt;bold &amp; &quot;quoted&quot;&lt;/b&gt;"
+    end
+
+    test "sets cache-control header" do
+      handler =
+        quote do
+          get("/", fn conn -> safe_html(conn, 201, "Hello") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.headers["cache-control"] == ["no-cache, no-store, must-revalidate"]
     end
   end
 
@@ -929,7 +1009,7 @@ defmodule FrancisTest do
         capture_log(fn ->
           response = Req.get!("/", plug: mod, retry: false)
           assert response.status == 500
-          assert response.body == "Internal Server Error"
+          assert response.body =~ "Internal Server Error"
         end)
 
       assert log =~ "Unhandled error: {:error, :fail}"
@@ -972,7 +1052,7 @@ defmodule FrancisTest do
           response = Req.get!("/", plug: mod, retry: false)
 
           assert response.status == 500
-          assert response.body == "Internal Server Error"
+          assert response.body =~ "Internal Server Error"
         end)
 
       assert log =~ "Unhandled error: %RuntimeError{message: \"test exception\"}"
@@ -998,7 +1078,7 @@ defmodule FrancisTest do
 
           response = Req.get!("/", plug: mod, retry: false)
           assert response.status == 500
-          assert response.body == "Internal Server Error"
+          assert response.body =~ "Internal Server Error"
         end)
 
       assert log =~ "Unhandled error:"

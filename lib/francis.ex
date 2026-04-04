@@ -129,7 +129,10 @@ defmodule Francis do
       end
 
       defp internal_server_error(conn) do
-        conn |> put_status(500) |> send_resp(500, "Internal Server Error") |> halt()
+        conn
+        |> put_resp_content_type("text/html")
+        |> send_resp(500, Francis.ErrorPage.render(500))
+        |> halt()
       end
     end
   end
