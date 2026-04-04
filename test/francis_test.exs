@@ -486,9 +486,13 @@ defmodule FrancisTest do
       # Use a short interval for testing (500ms)
       handler =
         quote do
-          ws(unquote(path), fn {:received, message}, _socket ->
-            {:reply, message}
-          end, heartbeat_interval: 500)
+          ws(
+            unquote(path),
+            fn {:received, message}, _socket ->
+              {:reply, message}
+            end,
+            heartbeat_interval: 500
+          )
         end
 
       bandit_opts = [port: port]
@@ -520,9 +524,13 @@ defmodule FrancisTest do
 
       handler =
         quote do
-          ws(unquote(path), fn {:received, message}, _socket ->
-            {:reply, message}
-          end, heartbeat_interval: 500)
+          ws(
+            unquote(path),
+            fn {:received, message}, _socket ->
+              {:reply, message}
+            end,
+            heartbeat_interval: 500
+          )
         end
 
       bandit_opts = [port: port]
@@ -556,9 +564,13 @@ defmodule FrancisTest do
 
       handler =
         quote do
-          ws(unquote(path), fn {:received, message}, _socket ->
-            {:reply, message}
-          end, heartbeat_interval: nil)
+          ws(
+            unquote(path),
+            fn {:received, message}, _socket ->
+              {:reply, message}
+            end,
+            heartbeat_interval: nil
+          )
         end
 
       bandit_opts = [port: port]
@@ -626,9 +638,13 @@ defmodule FrancisTest do
 
       handler =
         quote do
-          ws(unquote(path), fn {:received, message}, _socket ->
-            {:reply, "echo: #{message}"}
-          end, heartbeat_interval: 500)
+          ws(
+            unquote(path),
+            fn {:received, message}, _socket ->
+              {:reply, "echo: #{message}"}
+            end,
+            heartbeat_interval: 500
+          )
         end
 
       bandit_opts = [port: port]

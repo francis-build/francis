@@ -44,7 +44,10 @@ defmodule Francis.Plug.SecureHeadersTest do
       assert response.headers["x-frame-options"] == ["DENY"]
       assert response.headers["x-xss-protection"] == ["1; mode=block"]
       assert response.headers["referrer-policy"] == ["strict-origin-when-cross-origin"]
-      assert response.headers["permissions-policy"] == ["camera=(), microphone=(), geolocation=()"]
+
+      assert response.headers["permissions-policy"] == [
+               "camera=(), microphone=(), geolocation=()"
+             ]
     end
 
     test "sets custom headers when configured" do

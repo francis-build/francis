@@ -38,7 +38,9 @@ defmodule Francis.ErrorPage do
   """
   @spec render(integer()) :: String.t()
   def render(status) do
-    {title, message} = Map.get(@status_messages, status, {"Error", "An unexpected error occurred."})
+    {title, message} =
+      Map.get(@status_messages, status, {"Error", "An unexpected error occurred."})
+
     render(status, title, message)
   end
 
