@@ -15,7 +15,7 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
 ```elixir
 def deps do
   [
-    {:francis, "~> 0.2.0"}
+    {:francis, "~> 0.3.0"}
   ]
 end
 ```
@@ -131,7 +131,7 @@ Note: The `dev` option can only be set in your `config/config.exs` file, not in 
 
 ## Error Handling
 
-By default, Francis will return a 500 error with the message "Internal Server Error" if you return a tuple `{:error, any()}` or an exception is raised during the request handling.
+By default, Francis will return a styled HTML error page if you return a tuple `{:error, any()}` or an exception is raised during the request handling. Built-in error pages are provided for common status codes (400, 404, 500, 502, 503). You can also generate custom error pages using `Francis.ErrorPage.render/3`.
 
 ### Unmatched Routes
 
@@ -250,9 +250,13 @@ end
 
 - `:timeout` - The timeout for the WebSocket connection in milliseconds (default: 60_000)
 - `:heartbeat_interval` - The interval in milliseconds between ping frames (default: 30_000). Set to `nil` to disable.
+- `:max_frame_size` - The maximum allowed size in bytes for incoming frames (default: 65_536). Protects against memory exhaustion.
 
 ```elixir
-ws("/ws", fn {:received, msg}, _socket -> {:reply, msg} end, heartbeat_interval: 10_000)
+ws("/ws", fn {:received, msg}, _socket -> {:reply, msg} end,
+  heartbeat_interval: 10_000,
+  max_frame_size: 1_048_576  # 1 MB
+)
 ```
 
 ## Example of a router with Static serving
@@ -298,6 +302,91 @@ get("/", fn conn -> html(conn, 201, "<h1>Created</h1>") end)
 ```
 
 **Warning:** The `html/2` and `html/3` functions do not escape HTML content. Only use with trusted, static HTML content to avoid XSS vulnerabilities.
+
+### Safe HTML
+
+For untrusted or user-generated content, use `safe_html/2` and `safe_html/3` which automatically escape all HTML special characters:
+
+```elixir
+get("/profile", fn conn ->
+  user_input = conn.params["name"]
+  safe_html(conn, "<h1>Hello, #{user_input}!</h1>")
+end)
+```
+
+You can also use `Francis.HTML.escape/1` directly for fine-grained control when building templates with a mix of trusted markup and user content:
+
+```elixir
+get("/profile", fn conn ->
+  name = Francis.HTML.escape(conn.params["name"])
+  bio = Francis.HTML.escape(conn.params["bio"])
+
+  html(conn, """
+  <h1>#{name}</h1>
+  <p>#{bio}</p>
+  """)
+end)
+```
+
+## Security
+
+### Secure Headers
+
+The `Francis.Plug.SecureHeaders` plug adds sensible default security headers to every response:
+
+```elixir
+defmodule Example do
+  use Francis
+
+  plug Francis.Plug.SecureHeaders
+
+  get("/", fn conn -> html(conn, "<h1>Secured!</h1>") end)
+end
+```
+
+Default headers include `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Referrer-Policy`, `Permissions-Policy`, and `Strict-Transport-Security`. You can override any of them:
+
+```elixir
+plug Francis.Plug.SecureHeaders,
+  headers: %{"x-frame-options" => "SAMEORIGIN"}
+```
+
+### Content Security Policy
+
+The `Francis.Plug.CSP` plug sets a restrictive Content-Security-Policy header:
+
+```elixir
+defmodule Example do
+  use Francis
+
+  plug Francis.Plug.CSP
+
+  get("/", fn conn -> html(conn, "<h1>CSP Protected!</h1>") end)
+end
+```
+
+Customize directives or use report-only mode for testing:
+
+```elixir
+plug Francis.Plug.CSP,
+  directives: %{
+    "script-src" => "'self' https://cdn.example.com",
+    "style-src" => "'self' 'unsafe-inline'"
+  }
+
+# Or test without enforcing:
+plug Francis.Plug.CSP, report_only: true
+```
+
+### Redirect Safety
+
+The `redirect/2` and `redirect/3` helpers only accept relative paths to prevent open redirect vulnerabilities. Absolute URLs raise an `ArgumentError` and protocol-relative URLs (e.g. `//evil.com`) are neutralized:
+
+```elixir
+get("/old", fn conn -> redirect(conn, "/new") end)           # OK
+get("/old", fn conn -> redirect(conn, 301, "/new") end)      # OK
+get("/old", fn conn -> redirect(conn, "http://evil.com") end) # Raises ArgumentError
+```
 
 ## Example of a router with Plugs
 

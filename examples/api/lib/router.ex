@@ -1,6 +1,8 @@
 defmodule Api.Router do
   use Francis, error_handler: &__MODULE__.error/2
 
+  plug(Francis.Plug.SecureHeaders)
+
   alias Api.Todos
 
   get("/todos", fn _ ->

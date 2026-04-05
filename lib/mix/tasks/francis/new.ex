@@ -24,7 +24,7 @@ defmodule Mix.Tasks.Francis.New do
 
     defp deps do
       [
-        {:francis, "~> 0.1"}
+        {:francis, "~> 0.3"}
       ]
     end
   end
