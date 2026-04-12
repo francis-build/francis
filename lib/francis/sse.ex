@@ -70,9 +70,8 @@ defmodule Francis.SSE do
   """
   def init_conn(conn) do
     conn
-    |> Plug.Conn.put_resp_header("content-type", "text/event-stream")
+    |> Plug.Conn.put_resp_content_type("text/event-stream")
     |> Plug.Conn.put_resp_header("cache-control", "no-cache")
-    |> Plug.Conn.put_resp_header("connection", "keep-alive")
     |> Plug.Conn.put_resp_header("x-accel-buffering", "no")
     |> Plug.Conn.send_chunked(200)
   end

@@ -1,8 +1,6 @@
 defmodule FrancisSSETest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog
-
   @moduletag :capture_log
 
   describe "sse/3" do
@@ -38,9 +36,9 @@ defmodule FrancisSSETest do
       resp = Req.get!("http://localhost:#{port}/#{path}", into: :self)
 
       assert resp.status == 200
-      assert Req.Response.get_header(resp, "content-type") |> hd() =~ "text/event-stream"
-      assert Req.Response.get_header(resp, "cache-control") == ["no-cache"]
-      assert Req.Response.get_header(resp, "x-accel-buffering") == ["no"]
+      assert hd(resp.headers["content-type"]) =~ "text/event-stream"
+      assert resp.headers["cache-control"] == ["no-cache"]
+      assert resp.headers["x-accel-buffering"] == ["no"]
     end
 
     test "sends join event on connection", %{port: port} do
@@ -62,7 +60,7 @@ defmodule FrancisSSETest do
       mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
       {:ok, _} = start_supervised(mod)
 
-      resp = Req.get!("http://localhost:#{port}/#{path}", into: :self)
+      _resp = Req.get!("http://localhost:#{port}/#{path}", into: :self)
 
       assert_receive {:handler, :join_received}, 1000
 

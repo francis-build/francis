@@ -490,12 +490,13 @@ defmodule Francis do
             |> Map.put(:transport, self())
             |> Francis.SSE.setup_keepalive()
 
-          # Send join event
+          # Send join event, then enter the receive loop.
+          # Always return conn so the outer handle_response/3 sees a Plug.Conn.
           case Francis.SSE.call_join(unquote(handler), state) do
             {:chunk, data, state} ->
               case Plug.Conn.chunk(conn, data) do
                 {:ok, conn} -> loop(conn, state)
-                {:error, _} -> Francis.SSE.cancel_keepalive(state)
+                {:error, _} -> terminate(conn, :join_chunk_failed, state)
               end
 
             {:noreply, state} ->
@@ -508,7 +509,7 @@ defmodule Francis do
             :__francis_sse_keepalive__ ->
               case Francis.SSE.handle_keepalive(conn, state) do
                 {:ok, conn, state} -> loop(conn, state)
-                {:error, :closed} -> terminate(:keepalive_failed, state)
+                {:error, :closed} -> terminate(conn, :keepalive_failed, state)
               end
 
             msg ->
@@ -516,7 +517,7 @@ defmodule Francis do
                 {:chunk, data, state} ->
                   case Plug.Conn.chunk(conn, data) do
                     {:ok, conn} -> loop(conn, state)
-                    {:error, _} -> terminate(:chunk_failed, state)
+                    {:error, _} -> terminate(conn, :chunk_failed, state)
                   end
 
                 {:noreply, state} ->
@@ -534,10 +535,10 @@ defmodule Francis do
             {:noreply, state}
         end
 
-        defp terminate(reason, state) do
+        defp terminate(conn, reason, state) do
           Francis.SSE.cancel_keepalive(state)
           Francis.SSE.call_close(unquote(handler), {:close, reason}, state)
-          :ok
+          conn
         end
       end
     end
