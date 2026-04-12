@@ -5,7 +5,7 @@ defmodule Francis do
   This module performs multiple tasks:
     * Uses the Application module to start the Francis server
     * Defines the Francis.Router which uses Francis.Plug.Router, :match and :dispatch
-    * Defines the macros get, post, put, delete, patch and ws to define routes for each operation
+    * Defines the macros get, post, put, delete, patch, ws and sse to define routes for each operation
     * Setups Plug.Static with the given options
     * Sets up Plug.Parsers with the default configuration of:
       * ```elixir
@@ -29,6 +29,8 @@ defmodule Francis do
   @default_heartbeat_interval 30_000
   @default_ws_timeout 60_000
   @default_max_frame_size 65_536
+
+  @default_sse_keepalive_interval 15_000
 
   defmacro __using__(opts \\ []) do
     quote location: :keep do
@@ -354,6 +356,187 @@ defmodule Francis do
         def terminate(reason, state) do
           Francis.Websocket.cancel_heartbeat(state)
           Francis.Websocket.call_close(unquote(handler), {:close, reason}, state)
+          :ok
+        end
+      end
+    end
+  end
+
+  @doc """
+  Defines a Server-Sent Events (SSE) route with a unified event handler.
+
+  The handler function uses pattern matching on events, providing a consistent
+  API with the WebSocket macro. SSE connections are unidirectional (server-to-client),
+  so the handler receives messages via `send(socket.transport, message)` from other
+  processes and forwards them to the client as SSE events.
+
+  ## Events
+
+  The handler receives different event types that can be pattern matched:
+
+  - `:join` - Sent when a client connects. Return `{:reply, message}` to send an initial event.
+  - `{:close, reason}` - Sent when the connection closes. Return `:ok` or `:noreply`.
+  - `{:received, message}` - Messages sent to `socket.transport` from other processes.
+
+  ## Return Values
+
+  - `{:reply, response}` - where `response` can be:
+    - a binary – sent as `data: <string>\\n\\n`
+    - a map or list – JSON-encoded as `data: <json>\\n\\n`
+    - a map with `:event`, `:data`, and optionally `:id` / `:retry` keys –
+      sent with the corresponding SSE fields
+  - `:noreply` or `:ok` - to not send an event
+
+  ## Socket State
+
+  The socket state map includes:
+  - `:transport` - The transport process PID. Use `send(socket.transport, msg)` to push events.
+  - `:id` - A unique identifier for the SSE connection.
+  - `:path` - The actual request path (e.g., `/events/news`).
+  - `:params` - A map of path parameters extracted from the route.
+
+  ## Options
+
+  - `:keepalive_interval` - Interval in ms between keepalive comments (default: 15_000).
+    Set to `nil` to disable keepalive.
+
+  ## Examples
+
+  ```elixir
+  defmodule Example.Router do
+    use Francis
+
+    # Simple event stream
+    sse "/events", fn :join, socket ->
+      {:reply, %{type: "connected", id: socket.id}}
+    end
+
+    # With named events and full lifecycle
+    sse "/feed/:topic", fn
+      :join, socket ->
+        topic = socket.params["topic"]
+        {:reply, %{event: "welcome", data: %{topic: topic}}}
+
+      {:close, _reason}, _socket ->
+        :ok
+
+      {:received, message}, _socket ->
+        {:reply, message}
+    end
+
+    # Disable keepalive
+    sse "/raw", fn {:received, msg}, _socket ->
+      {:reply, msg}
+    end, keepalive_interval: nil
+  end
+  ```
+  """
+
+  @spec sse(
+          String.t(),
+          (event :: :join | {:close, term()} | {:received, term()},
+           socket :: %{id: binary(), transport: pid(), path: binary(), params: map()} ->
+             {:reply, binary() | map() | list()} | :noreply | :ok),
+          Keyword.t()
+        ) :: Macro.t()
+  defmacro sse(path, handler, opts \\ []) do
+    module_name = generate_sse_module_name(path)
+    handler_ast = build_sse_handler_ast(module_name, handler)
+
+    Code.compile_quoted(handler_ast)
+
+    quote location: :keep do
+      get(unquote(path), fn conn ->
+        socket_state = %{
+          id: 32 |> :crypto.strong_rand_bytes() |> Base.encode16(),
+          path: conn.request_path,
+          params: conn.params
+        }
+
+        keepalive_interval =
+          Keyword.get(
+            unquote(opts),
+            :keepalive_interval,
+            unquote(@default_sse_keepalive_interval)
+          )
+
+        state = Map.put(socket_state, :keepalive_interval, keepalive_interval)
+
+        unquote(module_name).run(conn, state)
+      end)
+    end
+  end
+
+  defp generate_sse_module_name(path) do
+    path
+    |> URI.parse()
+    |> Map.get(:path)
+    |> String.split("/")
+    |> Enum.map_join(".", &Macro.camelize/1)
+    |> then(&Module.concat([__MODULE__, "SSE", &1]))
+  end
+
+  defp build_sse_handler_ast(module_name, handler) do
+    quote do
+      defmodule unquote(module_name) do
+        require Logger
+
+        @doc false
+        def run(conn, state) do
+          conn = Francis.SSE.init_conn(conn)
+
+          state =
+            state
+            |> Map.put(:transport, self())
+            |> Francis.SSE.setup_keepalive()
+
+          # Send join event
+          case Francis.SSE.call_join(unquote(handler), state) do
+            {:chunk, data, state} ->
+              case Plug.Conn.chunk(conn, data) do
+                {:ok, conn} -> loop(conn, state)
+                {:error, _} -> Francis.SSE.cancel_keepalive(state)
+              end
+
+            {:noreply, state} ->
+              loop(conn, state)
+          end
+        end
+
+        defp loop(conn, state) do
+          receive do
+            :__francis_sse_keepalive__ ->
+              case Francis.SSE.handle_keepalive(conn, state) do
+                {:ok, conn, state} -> loop(conn, state)
+                {:error, :closed} -> terminate(:keepalive_failed, state)
+              end
+
+            msg ->
+              case handle_message(msg, state) do
+                {:chunk, data, state} ->
+                  case Plug.Conn.chunk(conn, data) do
+                    {:ok, conn} -> loop(conn, state)
+                    {:error, _} -> terminate(:chunk_failed, state)
+                  end
+
+                {:noreply, state} ->
+                  loop(conn, state)
+              end
+          end
+        end
+
+        defp handle_message(msg, state) do
+          unquote(handler).({:received, msg}, state)
+          |> Francis.SSE.format_response(state)
+        rescue
+          e ->
+            Logger.error("SSE Handler error: #{inspect(e)}")
+            {:noreply, state}
+        end
+
+        defp terminate(reason, state) do
+          Francis.SSE.cancel_keepalive(state)
+          Francis.SSE.call_close(unquote(handler), {:close, reason}, state)
           :ok
         end
       end
