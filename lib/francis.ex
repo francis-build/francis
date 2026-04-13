@@ -479,67 +479,8 @@ defmodule Francis do
   defp build_sse_handler_ast(module_name, handler) do
     quote do
       defmodule unquote(module_name) do
-        require Logger
-
         @doc false
-        def run(conn, state) do
-          conn = Francis.SSE.init_conn(conn)
-
-          state =
-            state
-            |> Map.put(:transport, self())
-            |> Francis.SSE.setup_keepalive()
-
-          # Send join event, then enter the receive loop.
-          # Always return conn so the outer handle_response/3 sees a Plug.Conn.
-          case Francis.SSE.call_join(unquote(handler), state) do
-            {:chunk, data, state} ->
-              case Plug.Conn.chunk(conn, data) do
-                {:ok, conn} -> loop(conn, state)
-                {:error, _} -> terminate(conn, :join_chunk_failed, state)
-              end
-
-            {:noreply, state} ->
-              loop(conn, state)
-          end
-        end
-
-        defp loop(conn, state) do
-          receive do
-            :__francis_sse_keepalive__ ->
-              case Francis.SSE.handle_keepalive(conn, state) do
-                {:ok, conn, state} -> loop(conn, state)
-                {:error, :closed} -> terminate(conn, :keepalive_failed, state)
-              end
-
-            msg ->
-              case handle_message(msg, state) do
-                {:chunk, data, state} ->
-                  case Plug.Conn.chunk(conn, data) do
-                    {:ok, conn} -> loop(conn, state)
-                    {:error, _} -> terminate(conn, :chunk_failed, state)
-                  end
-
-                {:noreply, state} ->
-                  loop(conn, state)
-              end
-          end
-        end
-
-        defp handle_message(msg, state) do
-          unquote(handler).({:received, msg}, state)
-          |> Francis.SSE.format_response(state)
-        rescue
-          e ->
-            Logger.error("SSE Handler error: #{inspect(e)}")
-            {:noreply, state}
-        end
-
-        defp terminate(conn, reason, state) do
-          Francis.SSE.cancel_keepalive(state)
-          Francis.SSE.call_close(unquote(handler), {:close, reason}, state)
-          conn
-        end
+        def run(conn, state), do: Francis.SSE.run(conn, state, unquote(handler))
       end
     end
   end
