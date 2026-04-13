@@ -6,7 +6,7 @@
 
 Simple boilerplate killer using Plug and Bandit inspired by [Sinatra](https://sinatrarb.com) for Ruby.
 
-Focused on reducing time to build as it offers automatic request parsing, automatic response parsing, easy DSL to build quickly new endpoints and websocket listeners.
+Focused on reducing time to build as it offers automatic request parsing, automatic response parsing, easy DSL to build quickly new endpoints, websocket and SSE listeners.
 
 ## Installation
 
@@ -172,6 +172,11 @@ defmodule Example do
 
   ws("/ws", fn {:received, "ping"}, _socket -> {:reply, "pong"} end)
 
+  sse("/events", fn
+    :join, socket -> {:reply, %{status: "connected", id: socket.id}}
+    {:received, msg}, _socket -> {:reply, msg}
+  end)
+
   unmatched(fn _ -> "not found" end)
 end
 ```
@@ -258,6 +263,91 @@ ws("/ws", fn {:received, msg}, _socket -> {:reply, msg} end,
   max_frame_size: 1_048_576  # 1 MB
 )
 ```
+
+## Server-Sent Events (SSE) Support
+
+Francis provides a simple DSL for SSE endpoints using the `sse/2` and `sse/3` macros. SSE connections are unidirectional (server-to-client) and use the same event-based API as WebSockets.
+
+### Basic Usage
+
+```elixir
+defmodule Example do
+  use Francis
+
+  sse("/events", fn
+    :join, socket ->
+      {:reply, %{type: "connected", id: socket.id}}
+
+    {:received, message}, _socket ->
+      {:reply, message}
+  end)
+end
+```
+
+### Events
+
+The handler receives the same event types as the WebSocket macro:
+
+- `:join` - Sent when a client connects
+- `{:close, reason}` - Sent when the connection closes
+- `{:received, message}` - Messages sent to `socket.transport` from other processes
+
+### Pushing Events
+
+Since SSE is server-to-client only, events are pushed by sending messages to the transport process from elsewhere in your application:
+
+```elixir
+# From any process that has the transport PID:
+send(socket.transport, "hello")
+send(socket.transport, %{event: "update", data: %{count: 42}})
+```
+
+### Named Events
+
+You can send structured SSE events with `event`, `id`, and `retry` fields:
+
+```elixir
+send(socket.transport, %{event: "user_joined", data: %{name: "Alice"}})
+send(socket.transport, %{event: "update", data: "payload", id: "42", retry: 5000})
+```
+
+### Full Example with Lifecycle Events
+
+```elixir
+defmodule EventServer do
+  use Francis
+
+  sse("/feed/:topic", fn
+    :join, socket ->
+      topic = socket.params["topic"]
+      {:reply, %{event: "welcome", data: %{topic: topic}}}
+
+    {:close, _reason}, _socket ->
+      :ok
+
+    {:received, message}, _socket ->
+      {:reply, message}
+  end)
+end
+```
+
+### Options
+
+- `:keepalive_interval` - Interval in milliseconds between keepalive comments (default: 15_000). Set to `nil` to disable.
+
+```elixir
+sse("/events", fn {:received, msg}, _socket -> {:reply, msg} end,
+  keepalive_interval: 5_000
+)
+```
+
+### Socket State
+
+The socket state map is the same as for WebSockets:
+- `:id` - A unique identifier for the SSE connection
+- `:transport` - The transport process PID for pushing events via `send/2`
+- `:path` - The actual request path of the SSE connection
+- `:params` - A map of path parameters extracted from the route
 
 ## Example of a router with Static serving
 
@@ -408,6 +498,7 @@ defmodule Example do
   get("/:name", fn %{params: %{"name" => name}} -> "hello #{name}" end)
 
   ws("/ws", fn {:received, "ping"}, _socket -> {:reply, "pong"} end)
+  sse("/events", fn {:received, msg}, _socket -> {:reply, msg} end)
 
   unmatched(fn _ -> "not found" end)
 end
@@ -440,4 +531,4 @@ defmodule TestApp do
 end
 ```
 
-Check the folder [examples](https://github.com/francis-build/francis/tree/main/examples) to see examples of how to use Francis.
+Check the folder [examples](https://github.com/francis-build/francis/tree/main/examples) to see examples of how to use Francis, including a [chat app](https://github.com/francis-build/francis/tree/main/examples/chat) (WebSocket), an [API with Ecto](https://github.com/francis-build/francis/tree/main/examples/api), and an [MCP server](https://github.com/francis-build/francis/tree/main/examples/mcp_server) (SSE).
