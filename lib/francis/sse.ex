@@ -54,6 +54,8 @@ defmodule Francis.SSE do
   def format_event(data) when is_map(data) or is_list(data),
     do: "data: #{Jason.encode!(data)}\n\n"
 
+  def format_event(data), do: "data: #{inspect(data)}\n\n"
+
   @doc """
   Translates a handler return value into an action for the SSE loop.
 
@@ -106,6 +108,12 @@ defmodule Francis.SSE do
     receive do
       :__francis_sse_keepalive__ ->
         handle_keepalive_tick(conn, state, handler)
+
+      {:plug_conn, _} ->
+        loop(conn, state, handler)
+
+      {:EXIT, _pid, reason} ->
+        terminate(conn, {:exit, reason}, handler, state)
 
       msg ->
         handle_incoming(conn, msg, state, handler)

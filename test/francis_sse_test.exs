@@ -5,21 +5,7 @@ defmodule FrancisSSETest do
 
   describe "sse/3" do
     setup do
-      port = Enum.random(5000..10_000)
-
-      on_exit(fn ->
-        case System.cmd("lsof", ["-ti", ":#{port}"], stderr_to_stdout: true) do
-          {pid_str, 0} when pid_str != "" ->
-            pid = String.trim(pid_str) |> String.to_integer()
-            System.cmd("kill", ["-INT", to_string(pid)])
-            Process.sleep(100)
-
-          _ ->
-            :ok
-        end
-      end)
-
-      %{port: port}
+      %{port: Enum.random(5000..10_000)}
     end
 
     test "sets correct SSE response headers", %{port: port} do
@@ -470,37 +456,40 @@ defmodule FrancisSSETest do
 
       handler =
         quote do
-          sse(unquote(path), fn
-            :join, socket ->
-              send(unquote(parent_pid), {:transport, socket.transport})
-              :noreply
+          sse(
+            unquote(path),
+            fn
+              :join, socket ->
+                send(unquote(parent_pid), {:transport, socket.transport})
+                :noreply
 
-            {:close, reason}, _socket ->
-              send(unquote(parent_pid), {:handler, {:close, reason}})
-              :ok
+              {:close, reason}, _socket ->
+                send(unquote(parent_pid), {:handler, {:close, reason}})
+                :ok
 
-            {:received, _msg}, _socket ->
-              :noreply
-          end)
+              {:received, _msg}, _socket ->
+                :noreply
+            end,
+            keepalive_interval: 100
+          )
         end
 
       mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
       {:ok, _} = start_supervised(mod)
 
-      # Use a task so we can cancel the request
+      # Use a task so we can shut it down to simulate client disconnect
       task =
         Task.async(fn ->
           Req.get!("http://localhost:#{port}/#{path}", into: :self)
         end)
 
-      assert_receive {:transport, transport}, 1000
+      assert_receive {:transport, _transport}, 1000
 
-      # Kill the SSE process to trigger close
-      Process.exit(transport, :kill)
+      # Shut down the client task to simulate client-side disconnect.
+      # The close handler is triggered when the next keepalive write fails.
+      Task.shutdown(task, :brutal_kill)
 
       assert_receive {:handler, {:close, _reason}}, 2000
-      # Clean up the task
-      Task.shutdown(task, :brutal_kill)
     end
 
     test "handles missing {:close, reason} pattern match gracefully", %{port: port} do
@@ -509,14 +498,18 @@ defmodule FrancisSSETest do
 
       handler =
         quote do
-          sse(unquote(path), fn
-            :join, socket ->
-              send(unquote(parent_pid), {:transport, socket.transport})
-              :noreply
+          sse(
+            unquote(path),
+            fn
+              :join, socket ->
+                send(unquote(parent_pid), {:transport, socket.transport})
+                :noreply
 
-            {:received, _msg}, _socket ->
-              :noreply
-          end)
+              {:received, _msg}, _socket ->
+                :noreply
+            end,
+            keepalive_interval: 100
+          )
         end
 
       mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
@@ -527,14 +520,11 @@ defmodule FrancisSSETest do
           Req.get!("http://localhost:#{port}/#{path}", into: :self)
         end)
 
-      assert_receive {:transport, transport}, 1000
+      assert_receive {:transport, _transport}, 1000
 
-      # Kill the SSE process - should not crash even without {:close, reason} handler
-      Process.exit(transport, :kill)
-      Process.sleep(100)
-
-      # No crash - test passes if we get here
+      # Shut down the client to simulate disconnect; should not crash without a {:close, _} handler
       Task.shutdown(task, :brutal_kill)
+      Process.sleep(300)
     end
 
     test "join reply is sent as the first SSE event", %{port: port} do
