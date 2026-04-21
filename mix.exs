@@ -1,7 +1,7 @@
 defmodule Francis.MixProject do
   use Mix.Project
 
-  @version "0.3.1"
+  @version "0.3.2"
   @description "Boilerplate killer using Plug with Bandit to quickly build endpoints, websocket and SSE listeners"
   @scm_url "https://github.com/francis-build/francis"
 
