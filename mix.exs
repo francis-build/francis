@@ -61,6 +61,7 @@ defmodule Francis.MixProject do
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:req, "~> 0.5", only: [:test]},
       {:websockex, "~> 0.4", only: [:test]},
+      {:mint, "~> 1.7", only: [:test]},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

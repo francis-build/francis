@@ -292,15 +292,17 @@ defmodule Francis do
     end
   end
 
-  # Private helper functions for WebSocket macro
-  defp generate_ws_module_name(path) do
+  defp path_to_module_suffix(path) do
     path
     |> URI.parse()
     |> Map.get(:path)
     |> String.split("/")
     |> Enum.map_join(".", &Macro.camelize/1)
-    |> then(&Module.concat([__MODULE__, &1]))
   end
+
+  defp generate_ws_module_name(path),
+    do: path |> path_to_module_suffix() |> then(&Module.concat([__MODULE__, &1]))
+
 
   defp build_ws_handler_ast(module_name, handler) do
     quote do
@@ -341,6 +343,129 @@ defmodule Francis do
           Francis.Websocket.cancel_heartbeat(state)
           Francis.Websocket.call_close(unquote(handler), {:close, reason}, state)
           :ok
+        end
+      end
+    end
+  end
+
+  @doc """
+  Defines a Server-Sent Events (SSE) route.
+
+  The handler function uses pattern matching on lifecycle events. The connection stays
+  open and events are streamed to the client. Messages sent to `socket.transport` are
+  automatically forwarded as SSE events.
+
+  ## Events
+
+  - `:join` - Sent when a client connects. Return `{:reply, message}` to send a welcome event.
+  - `{:close, reason}` - Sent when the connection closes. Return `:ok` or `:noreply`.
+
+  ## Return Values
+
+  - `{:reply, response}` - where `response` can be a binary, a map, or a list (maps/lists will be JSON encoded)
+  - `:noreply` or `:ok` - to not send a response
+
+  ## Socket State
+
+  The socket state map includes:
+  - `:transport` - The process pid. Send messages here to push SSE events to the client.
+  - `:id` - A unique identifier for the connection.
+  - `:path` - The actual request path.
+  - `:params` - A map of path parameters.
+
+  ## Options
+
+  - `:timeout` - How long to keep the connection open in milliseconds (default: `:infinity`)
+
+  ## Examples
+
+  ```elixir
+  defmodule Example.Router do
+    use Francis
+
+    sse "/events", fn
+      :join, socket ->
+        {:reply, %{type: "connected", id: socket.id}}
+
+      {:close, _reason}, _socket ->
+        :ok
+    end
+
+    sse "/stream/:topic", fn
+      :join, socket ->
+        topic = socket.params["topic"]
+        send(socket.transport, "subscribed to: " <> topic)
+        :noreply
+
+      {:close, _reason}, _socket ->
+        :ok
+    end
+  end
+  ```
+  """
+  @spec sse(
+          String.t(),
+          (event :: :join | {:close, term()},
+           socket :: %{id: binary(), transport: pid(), path: binary(), params: map()} ->
+             {:reply, binary() | map() | list()} | :noreply | :ok),
+          Keyword.t()
+        ) :: Macro.t()
+  defmacro sse(path, handler, opts \\ []) do
+    module_name = generate_sse_module_name(path)
+    handler_ast = build_sse_handler_ast(module_name, handler)
+    timeout = Keyword.get(opts, :timeout, :infinity)
+
+    Code.compile_quoted(handler_ast)
+
+    quote location: :keep do
+      get(unquote(path), fn conn ->
+        state = %{
+          id: 32 |> :crypto.strong_rand_bytes() |> Base.encode16(),
+          path: conn.request_path,
+          params: conn.params,
+          transport: self()
+        }
+
+        conn
+        |> put_resp_header("content-type", "text/event-stream")
+        |> put_resp_header("cache-control", "no-cache")
+        |> put_resp_header("connection", "keep-alive")
+        |> send_chunked(200)
+        |> unquote(module_name).run(state, unquote(timeout))
+      end)
+    end
+  end
+
+  defp generate_sse_module_name(path),
+    do: path |> path_to_module_suffix() |> then(&Module.concat([__MODULE__, SSE, &1]))
+
+  defp build_sse_handler_ast(module_name, handler) do
+    quote do
+      defmodule unquote(module_name) do
+        def run(conn, state, timeout) do
+          {:ok, conn, state} = Francis.SSE.call_join(unquote(handler), conn, state)
+          loop(conn, state, timeout)
+        end
+
+        defp loop(conn, state, timeout) do
+          receive do
+            msg when is_binary(msg) or is_map(msg) or is_list(msg) ->
+              case Francis.SSE.send_event(conn, msg) do
+                {:ok, conn} ->
+                  loop(conn, state, timeout)
+
+                {:error, _reason} ->
+                  Francis.SSE.call_close(unquote(handler), {:close, :disconnected}, state)
+                  conn
+              end
+
+            _other ->
+              loop(conn, state, timeout)
+          after
+            timeout ->
+              Francis.SSE.call_close(unquote(handler), {:close, :timeout}, state)
+              conn
+          end
         end
       end
     end

@@ -1041,4 +1041,126 @@ defmodule FrancisTest do
       assert Francis.get_configuration(:test_key, [], "default") == "default"
     end
   end
+
+  describe "sse/1" do
+    setup do
+      %{port: Enum.random(10_001..20_000)}
+    end
+
+    @tag :capture_log
+    test "sends welcome message on :join", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          sse(unquote(path), fn
+            :join, socket ->
+              send(unquote(parent_pid), {:handler, :join_received})
+              {:reply, "welcome"}
+
+            {:close, _reason}, _socket ->
+              :ok
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      start_supervised!(
+        {Support.SseTester, %{url: "http://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+      )
+
+      assert_receive {:handler, :join_received}, 1000
+      assert_receive {:client, "welcome"}, 1000
+    end
+
+    @tag :capture_log
+    test "forwards messages sent to transport as SSE events", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          sse(unquote(path), fn
+            :join, socket ->
+              send(socket.transport, "hello")
+              send(socket.transport, %{key: "value"})
+              send(socket.transport, [1, 2, 3])
+              :noreply
+
+            {:close, _reason}, _socket ->
+              :ok
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      start_supervised!(
+        {Support.SseTester, %{url: "http://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+      )
+
+      assert_receive {:client, "hello"}, 1000
+      assert_receive {:client, %{"key" => "value"}}, 1000
+      assert_receive {:client, [1, 2, 3]}, 1000
+    end
+
+    @tag :capture_log
+    test "exposes socket id, path, and params", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          sse(unquote(path), fn
+            :join, socket ->
+              send(unquote(parent_pid), {:socket, socket})
+              :noreply
+
+            {:close, _reason}, _socket ->
+              :ok
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      start_supervised!(
+        {Support.SseTester, %{url: "http://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+      )
+
+      assert_receive {:socket, socket}, 1000
+      assert is_binary(socket.id) and byte_size(socket.id) > 0
+      assert is_pid(socket.transport)
+      assert socket.path == "/#{path}"
+    end
+
+    @tag :capture_log
+    test "calls :close handler on timeout", %{port: port} do
+      parent_pid = self()
+      path = 10 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
+
+      handler =
+        quote do
+          sse(unquote(path), fn
+            :join, _socket ->
+              :noreply
+
+            {:close, reason}, _socket ->
+              send(unquote(parent_pid), {:handler, {:close, reason}})
+              :ok
+          end, timeout: 200)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      start_supervised!(
+        {Support.SseTester, %{url: "http://localhost:#{port}/#{path}", parent_pid: parent_pid}}
+      )
+
+      assert_receive {:handler, {:close, :timeout}}, 500
+    end
+  end
 end
