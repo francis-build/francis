@@ -27,6 +27,12 @@ defmodule Mix.Tasks.Francis.Digest do
     * `--exclude` - list of file patterns to exclude from digest.
       Example: `--exclude '*.txt' --exclude '*.json'`
 
+    * `--clean` - removes previously digested files and the manifest before
+      regenerating. Uses the existing manifest to identify files to delete, so
+      only known digested files are removed. Useful for single-instance deploys
+      where stale hashed files are never needed. Avoid in rolling/blue-green
+      deployments where old instances may still serve previous asset hashes.
+
   The output will be a set of digested files along with a cache manifest file.
   The manifest file maps original file names to their digested counterparts.
 
@@ -40,6 +46,10 @@ defmodule Mix.Tasks.Francis.Digest do
 
       $ mix francis.digest assets --output priv/static
       Generated digested assets from assets to priv/static
+
+      $ mix francis.digest priv/static --clean
+      Cleaned 4 previously digested files
+      Generated digested assets in priv/static
   """
 
   alias Mix.Tasks.Francis.Digest.Manifest
@@ -64,6 +74,8 @@ defmodule Mix.Tasks.Francis.Digest do
 
     File.mkdir_p!(output_path)
 
+    if opts[:clean], do: clean_old_digests(output_path)
+
     Mix.shell().info("Generating digested files from #{input_path} to #{output_path}")
 
     exclude_regexes = compile_exclude_patterns(opts[:exclude] || [])
@@ -86,7 +98,8 @@ defmodule Mix.Tasks.Francis.Digest do
           output: :string,
           age: :integer,
           gzip: :boolean,
-          exclude: :keep
+          exclude: :keep,
+          clean: :boolean
         ],
         aliases: [
           o: :output
@@ -97,9 +110,32 @@ defmodule Mix.Tasks.Francis.Digest do
       opts
       |> Keyword.put_new(:age, @default_age)
       |> Keyword.put_new(:gzip, true)
+      |> Keyword.put_new(:clean, false)
       |> process_exclude_patterns()
 
     {opts, args}
+  end
+
+  defp clean_old_digests(output_path) do
+    manifest_path = Path.join(output_path, "cache_manifest.json")
+
+    with {:ok, content} <- File.read(manifest_path),
+         {:ok, %{"files" => files}} <- Jason.decode(content) do
+      count =
+        Enum.reduce(files, 0, fn {_, info}, acc ->
+          digested = Path.join(output_path, info["digested_path"])
+          deleted = if File.rm(digested) == :ok, do: 1, else: 0
+
+          if gzip_path = get_in(info, ["gzipped", "path"]) do
+            File.rm(Path.join(output_path, gzip_path))
+          end
+
+          acc + deleted
+        end)
+
+      File.rm(manifest_path)
+      Mix.shell().info("Cleaned #{count} previously digested files")
+    end
   end
 
   defp process_exclude_patterns(opts) do
@@ -151,18 +187,6 @@ defmodule Mix.Tasks.Francis.Digest do
 
     File.write!(digested_path, content)
 
-    gzipped_info =
-      if opts[:gzip] do
-        gzipped_content = :zlib.gzip(content)
-        gzipped_path = digested_path <> ".gz"
-        File.write!(gzipped_path, gzipped_content)
-
-        %{
-          path: Path.relative_to(gzipped_path, output_path),
-          size: byte_size(gzipped_content)
-        }
-      end
-
     file_info = %{
       logical_path: relative_path,
       digest: digest,
@@ -171,8 +195,15 @@ defmodule Mix.Tasks.Francis.Digest do
       mtime: get_mtime(file_path)
     }
 
-    if gzipped_info do
-      Map.put(file_info, :gzipped, gzipped_info)
+    if opts[:gzip] do
+      gzipped_content = :zlib.gzip(content)
+      gzipped_path = digested_path <> ".gz"
+      File.write!(gzipped_path, gzipped_content)
+
+      Map.put(file_info, :gzipped, %{
+        path: Path.relative_to(gzipped_path, output_path),
+        size: byte_size(gzipped_content)
+      })
     else
       file_info
     end

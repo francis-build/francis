@@ -72,6 +72,7 @@ Options:
 - `--age` - Cache control max age in seconds (defaults to 31536000, 1 year)
 - `--gzip` - Generate gzipped files (defaults to true)
 - `--exclude` - File patterns to exclude (e.g., `--exclude '*.txt' --exclude '*.json'`)
+- `--clean` - Remove previously digested files and manifest before regenerating. Safe for single-instance deploys; avoid in rolling/blue-green deployments where old instances may still serve previous asset hashes.
 
 ### Static Module
 
