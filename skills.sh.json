@@ -1,0 +1,12 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "Francis",
+      "description": "Skills for building with the Francis framework — a Sinatra-inspired boilerplate killer for HTTP, WebSocket, and SSE endpoints built on Plug + Bandit.",
+      "skills": [
+        "francis-thinking"
+      ]
+    }
+  ]
+}

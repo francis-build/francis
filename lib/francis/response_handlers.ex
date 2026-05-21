@@ -220,10 +220,15 @@ defmodule Francis.ResponseHandlers do
   end
 
   @doc """
-  Sends an HTML response with a 200 status code, escaping the content to prevent XSS.
+  Sends a response with a 200 status code, escaping the entire content string to prevent XSS.
 
-  Unlike `html/2`, this function escapes all HTML special characters in the content,
-  making it safe for rendering untrusted or user-generated input.
+  Unlike `html/2`, this function escapes all HTML special characters in the content.
+  Use it when the entire response is untrusted input that should be rendered as escaped text.
+
+  To mix trusted markup with user content, use `html/2` with `Francis.HTML.escape/1` on
+  only the interpolated values:
+
+      html(conn, "<h1>Hello, \#{Francis.HTML.escape(user_input)}!</h1>")
 
   ## Examples
 
@@ -233,7 +238,7 @@ defmodule Francis.ResponseHandlers do
 
     get("/", fn conn ->
       user_input = conn.params["name"]
-      safe_html(conn, "<h1>Hello, \#{user_input}!</h1>")
+      safe_html(conn, user_input)
     end)
   end
   ```
@@ -246,10 +251,15 @@ defmodule Francis.ResponseHandlers do
   end
 
   @doc """
-  Sends an HTML response with the given status code, escaping the content to prevent XSS.
+  Sends a response with the given status code, escaping the entire content string to prevent XSS.
 
-  Unlike `html/3`, this function escapes all HTML special characters in the content,
-  making it safe for rendering untrusted or user-generated input.
+  Unlike `html/3`, this function escapes all HTML special characters in the content.
+  Use it when the entire response is untrusted input that should be rendered as escaped text.
+
+  To mix trusted markup with user content, use `html/3` with `Francis.HTML.escape/1` on
+  only the interpolated values:
+
+      html(conn, 201, "<h1>Created: \#{Francis.HTML.escape(user_input)}</h1>")
 
   ## Examples
 
@@ -259,7 +269,7 @@ defmodule Francis.ResponseHandlers do
 
     get("/", fn conn ->
       user_input = conn.params["name"]
-      safe_html(conn, 201, "<h1>Created: \#{user_input}</h1>")
+      safe_html(conn, 201, user_input)
     end)
   end
   ```
