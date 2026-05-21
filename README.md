@@ -41,6 +41,14 @@ mix francis.new my_app --sup MyApp
 
 Use `mix help francis.new` to see all the available options.
 
+## Claude Code Skill
+
+If you use [Claude Code](https://claude.ai/code), install the Francis skill for AI-aware assistance with routes, WebSocket, SSE, security patterns, and gotchas:
+
+```bash
+npx skills add francis-build/francis@francis-thinking
+```
+
 ## Usage
 
 To start the server up you can run `mix francis.server` or if you need a iex console you can run with `iex -S mix francis.server`.
@@ -396,16 +404,16 @@ get("/", fn conn -> html(conn, 201, "<h1>Created</h1>") end)
 
 ### Safe HTML
 
-For untrusted or user-generated content, use `safe_html/2` and `safe_html/3` which automatically escape all HTML special characters:
+For untrusted or user-generated content, use `safe_html/2` and `safe_html/3` to render the entire string as escaped text, or use `Francis.HTML.escape/1` to escape only the interpolated values inside trusted markup:
 
 ```elixir
-get("/profile", fn conn ->
-  user_input = conn.params["name"]
-  safe_html(conn, "<h1>Hello, #{user_input}!</h1>")
+# safe_html escapes the ENTIRE string — use when the whole response is untrusted input:
+get("/raw", fn conn ->
+  safe_html(conn, conn.params["name"])
 end)
 ```
 
-You can also use `Francis.HTML.escape/1` directly for fine-grained control when building templates with a mix of trusted markup and user content:
+Use `Francis.HTML.escape/1` directly when mixing trusted markup with user content:
 
 ```elixir
 get("/profile", fn conn ->
