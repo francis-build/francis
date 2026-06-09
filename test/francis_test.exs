@@ -824,6 +824,38 @@ defmodule FrancisTest do
     end
   end
 
+  describe "markdown/2" do
+    test "returns a Markdown response with 200 status" do
+      handler =
+        quote do
+          get("/", fn conn -> markdown(conn, "# Hello, World!") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 200
+      assert response.headers["content-type"] == ["text/markdown; charset=utf-8"]
+      assert response.body == "# Hello, World!"
+    end
+  end
+
+  describe "markdown/3" do
+    test "returns a Markdown response with custom status" do
+      handler =
+        quote do
+          get("/", fn conn -> markdown(conn, 201, "# Created") end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler)
+      response = Req.get!("/", plug: mod)
+
+      assert response.status == 201
+      assert response.headers["content-type"] == ["text/markdown; charset=utf-8"]
+      assert response.body == "# Created"
+    end
+  end
+
   describe "html/2" do
     test "returns an HTML response with 200 status" do
       handler =

@@ -393,6 +393,13 @@ get("/text", fn conn -> text(conn, "Hello, World!") end)
 get("/text", fn conn -> text(conn, 201, "Resource created") end)
 ```
 
+### Markdown
+
+```elixir
+get("/readme", fn conn -> markdown(conn, "# Hello, World!") end)
+get("/readme", fn conn -> markdown(conn, 201, "# Created") end)
+```
+
 ### HTML
 
 ```elixir

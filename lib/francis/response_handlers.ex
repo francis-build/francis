@@ -163,6 +163,50 @@ defmodule Francis.ResponseHandlers do
   end
 
   @doc """
+  Sends a Markdown response with the given status code and content.
+
+  ## Examples
+
+  ```elixir
+  defmodule Example do
+    use Francis
+
+    get("/readme", fn conn ->
+      markdown(conn, 200, "# Hello World!")
+    end)
+  end
+  ```
+  """
+  @spec markdown(Plug.Conn.t(), integer(), String.t()) :: Plug.Conn.t()
+  def markdown(conn, status, markdown) do
+    conn
+    |> put_resp_content_type("text/markdown")
+    |> send_resp(status, markdown)
+  end
+
+  @doc """
+  Sends a Markdown response with a 200 status code and the given content.
+
+  ## Examples
+
+  ```elixir
+  defmodule Example do
+    use Francis
+
+    get("/readme", fn conn ->
+      markdown(conn, "# Hello World!")
+    end)
+  end
+  ```
+  """
+  @spec markdown(Plug.Conn.t(), String.t()) :: Plug.Conn.t()
+  def markdown(conn, markdown) do
+    conn
+    |> put_resp_content_type("text/markdown")
+    |> send_resp(200, markdown)
+  end
+
+  @doc """
   Sends an HTML response with a 200 status code and HTML content.
 
   **Warning:** The following function does **not** escape HTML content.
