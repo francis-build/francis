@@ -11,6 +11,9 @@ permissions:
 jobs:
   tag:
     runs-on: ubuntu-latest
+    outputs:
+      tag: v${{ steps.get_version.outputs.version }}
+      created: ${{ steps.check_tag.outputs.exists == 'false' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -27,6 +30,7 @@ jobs:
         run: |
           VERSION=$(grep -m 1 '@version' mix.exs | sed 's/.*"\([0-9.]*\)".*/\1/')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Check if tag exists
         id: check_tag
@@ -43,3 +47,15 @@ jobs:
         run: |
           git tag v$VERSION
           git push origin v$VERSION
+
+  # A tag pushed with GITHUB_TOKEN does not trigger other workflows, so the
+  # release is called directly, and only for a tag this run just created.
+  release:
+    needs: tag
+    if: needs.tag.outputs.created == 'true'
+    uses: ./.github/workflows/release.yaml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+    secrets: inherit
+    permissions:
+      contents: write
