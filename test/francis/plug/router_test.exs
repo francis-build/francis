@@ -28,7 +28,9 @@ defmodule Francis.Plug.RouterTest do
         end)
 
       assert log =~ "[warning] Failed to match route: GET /a/b"
-      refute log =~ "[error]"
+      # capture_log sees every process, so only check this request's line;
+      # concurrent async tests may log unrelated errors.
+      refute log =~ "[error] Failed to match route"
     end
   end
 end
