@@ -1,17 +1,23 @@
 name: Release
 
+# Builds, creates the GitHub release and publishes to Hex for one tag.
+#
+# Called by tag-and-release.yaml right after it pushes a new version tag: a tag
+# pushed with GITHUB_TOKEN cannot trigger a `push: tags` workflow, so the call
+# has to be explicit. Can also be run by hand for an existing tag.
 on:
-  push:
-    tags:
-      - "v*.*.*"
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.2.3)"
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to build from (e.g., v1.2.3)"
+        description: "Tag to release (e.g. v1.2.3)"
+        type: string
         required: true
-        default: ""
 
 permissions:
   contents: write
@@ -25,17 +31,23 @@ jobs:
         elixir: ["1.18.4"]
 
     runs-on: ${{matrix.os}}
+    env:
+      TAG: ${{ inputs.tag }}
     steps:
-      - name: Checkout code
+      # Everything below builds and is named from the tag, never from the ref
+      # the workflow happened to run on.
+      - name: Checkout tag
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          ref: refs/tags/${{ inputs.tag }}
 
-      - name: Checkout specified tag (manual dispatch only)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+      - name: Check tag matches mix.exs version
         run: |
-          git fetch --tags
-          git checkout ${{ inputs.tag }}
+          VERSION=$(grep -m 1 '@version' mix.exs | sed 's/.*"\([0-9.]*\)".*/\1/')
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag $TAG does not match @version $VERSION in mix.exs"
+            exit 1
+          fi
 
       - name: Set up Elixir
         uses: marmelasoft/elixir-setup@main
@@ -61,8 +73,8 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ inputs.tag }}
+          name: Release ${{ inputs.tag }}
           generate_release_notes: true
           files: ${{ env.ARCHIVE_FILE }}
         env:
