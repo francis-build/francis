@@ -153,14 +153,16 @@ defmodule Mix.Tasks.Francis.Digest do
   # Manifest entries come from disk, so only paths that stay inside output_path are touched
   defp safe_output_path(_output_path, nil), do: :error
 
+  # Hand-rolled rather than Path.safe_relative/2, which needs Elixir 1.16.
   defp safe_output_path(output_path, relative_path) when is_binary(relative_path) do
-    case Path.safe_relative(relative_path, output_path) do
-      {:ok, safe_path} ->
-        {:ok, Path.join(output_path, safe_path)}
+    root = Path.expand(output_path)
+    full_path = Path.expand(relative_path, root)
 
-      :error ->
-        Mix.shell().error("Skipping unsafe manifest path #{inspect(relative_path)}")
-        :error
+    if Path.type(relative_path) == :relative and String.starts_with?(full_path, root <> "/") do
+      {:ok, full_path}
+    else
+      Mix.shell().error("Skipping unsafe manifest path #{inspect(relative_path)}")
+      :error
     end
   end
 

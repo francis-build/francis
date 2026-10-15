@@ -28,10 +28,12 @@ jobs:
         # oldest and newest Erlang/OTP it supports, per
         # https://hexdocs.pm/elixir/compatibility-and-deprecations.html
         # Versions are loose: `1.19` / `28` resolve to the latest patch release.
+        # OTP 24 (end-of-life) is skipped: the test-only HTTP client (Finch)
+        # needs OTP 25+.
         include:
-          - { elixir: "1.15", otp: "24" }
+          - { elixir: "1.15", otp: "25" }
           - { elixir: "1.15", otp: "26" }
-          - { elixir: "1.16", otp: "24" }
+          - { elixir: "1.16", otp: "25" }
           - { elixir: "1.16", otp: "26" }
           - { elixir: "1.17", otp: "25" }
           - { elixir: "1.17", otp: "27" }

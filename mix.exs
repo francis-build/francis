@@ -19,7 +19,10 @@ defmodule Francis.MixProject do
       source_url: @scm_url,
       elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: dialyzer(),
-      escript: escript()
+      escript: escript(),
+      # Accepted for now: HTTP/2 flow-control issue in Bandit with no patched
+      # release yet. Remove once Bandit ships a fix.
+      hex: [ignore_advisories: ["EEF-CVE-2026-105659"]]
     ]
   end
 
