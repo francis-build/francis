@@ -1,6 +1,8 @@
 defmodule Francis.StaticTest do
   use ExUnit.Case, async: true
 
+  alias Mix.Tasks.Francis.Digest.Manifest
+
   @test_manifest_path "tmp/test_cache_manifest.json"
   @test_manifest %{
     "version" => 1,
@@ -136,6 +138,75 @@ defmodule Francis.StaticTest do
 
     test "returns empty map when manifest doesn't exist" do
       assert Francis.Static.all("nonexistent.json") == %{}
+    end
+  end
+
+  describe "cache_control/1" do
+    test "returns the cache_control recorded in the manifest" do
+      path = "tmp/test_cache_control_manifest.json"
+      File.write!(path, Jason.encode!(%{"cache_control" => "public, max-age=60, immutable"}))
+      on_exit(fn -> File.rm_rf!(path) end)
+
+      assert Francis.Static.cache_control(path) == "public, max-age=60, immutable"
+    end
+
+    test "returns nil when manifest doesn't exist" do
+      assert Francis.Static.cache_control("nonexistent.json") == nil
+    end
+  end
+
+  describe "load_manifest/1 caching" do
+    @tag :tmp_dir
+    test "caches the decoded manifest and reloads when the file changes", %{tmp_dir: tmp_dir} do
+      path = Path.join(tmp_dir, "cache_manifest.json")
+      key = {Francis.Static, path}
+      on_exit(fn -> :persistent_term.erase(key) end)
+
+      File.write!(path, Jason.encode!(@test_manifest))
+      assert Francis.Static.static_path("app.css", "/", path) == "/app-a1b2c3d4.css"
+      assert {_version, %{"files" => _}} = :persistent_term.get(key)
+
+      # A cached entry is served without touching the file contents again
+      File.chmod!(path, 0o000)
+      assert Francis.Static.static_path("app.css", "/", path) == "/app-a1b2c3d4.css"
+      File.chmod!(path, 0o644)
+
+      redigested =
+        put_in(@test_manifest, ["files", "app.css", "digested_path"], "app-ffffffffffff.css")
+
+      File.write!(path, Jason.encode!(redigested))
+      File.touch!(path, System.os_time(:second) + 10)
+
+      assert Francis.Static.static_path("app.css", "/", path) == "/app-ffffffffffff.css"
+    end
+
+    @tag :tmp_dir
+    test "reloads a same-size manifest rewritten within the same second", %{tmp_dir: tmp_dir} do
+      path = Path.join(tmp_dir, "cache_manifest.json")
+      on_exit(fn -> :persistent_term.erase({Francis.Static, path}) end)
+
+      write = fn digest ->
+        Manifest.write(path, [
+          %{
+            logical_path: "app.css",
+            digest: digest,
+            digested_path: "app-#{digest}.css",
+            size: 1,
+            mtime: nil
+          }
+        ])
+      end
+
+      write.("aaaaaaaaaaaa")
+      assert Francis.Static.static_path("app.css", "/", path) == "/app-aaaaaaaaaaaa.css"
+      %File.Stat{mtime: mtime, size: size} = File.stat!(path, time: :posix)
+
+      write.("bbbbbbbbbbbb")
+      # Pin the rewrite to the same second, as a fast redeploy would
+      File.touch!(path, mtime)
+      assert %File.Stat{mtime: ^mtime, size: ^size} = File.stat!(path, time: :posix)
+
+      assert Francis.Static.static_path("app.css", "/", path) == "/app-bbbbbbbbbbbb.css"
     end
   end
 end

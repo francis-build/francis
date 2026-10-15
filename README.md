@@ -15,7 +15,7 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
 ```elixir
 def deps do
   [
-    {:francis, "~> 0.3.0"}
+    {:francis, "~> 0.4.0"}
   ]
 end
 ```
@@ -138,6 +138,13 @@ end
 
 Note: The `dev` option can only be set in your `config/config.exs` file, not in the `use` macro.
 
+When to configure what:
+
+- `bandit_opts` is read when the server starts and `error_handler` when an error is handled, so `config/runtime.exs` works for both.
+- `static`, `parser` and `log_level` build the plug pipeline, so they are read at compile time. Set them in `config/config.exs` or the environment-specific files.
+- When `bandit_opts` has no `:port`, Francis uses the `PORT` environment variable if it is set.
+- `static: false` turns static file serving off.
+
 ## Error Handling
 
 By default, Francis will return a styled HTML error page if you return a tuple `{:error, any()}` or an exception is raised during the request handling. Built-in error pages are provided for common status codes (400, 404, 500, 502, 503). You can also generate custom error pages using `Francis.ErrorPage.render/3`.
@@ -167,7 +174,13 @@ defmodule Example do
 end
 ```
 
-If you do not handle errors explicitly, Francis will catch them and return a 500 response.
+The error handler receives one of:
+
+- `{:error, reason}`, returned from a route
+- an exception, raised in a route or earlier in the pipeline (for example `Plug.Parsers.ParseError` for malformed JSON)
+- `{kind, reason}`, for a `throw` or `exit`
+
+Without a custom handler, Francis renders an error page with the status the exception carries: 400 for malformed JSON, 404 for exceptions like `Ecto.NoResultsError`, and 500 for anything else, including `{:error, reason}`. If the custom handler itself raises, both errors are logged and the default page is rendered.
 
 ## Example of a router
 
@@ -228,6 +241,16 @@ The handler receives different event types that can be pattern matched:
 - `:join` - Sent when a client connects
 - `{:close, reason}` - Sent when the connection closes
 - `{:received, message}` - Regular WebSocket text messages from the client
+- `{:info, message}` - Messages sent to `socket.transport` from other processes (optional)
+
+If the handler has no `{:info, _}` clause, messages sent with `send(socket.transport, message)` go straight to the client when they are a binary, map, list or `{type, payload}` frame. Any other message is logged and dropped. Add an `{:info, _}` clause to handle PubSub broadcasts or monitor `:DOWN` messages yourself:
+
+```elixir
+ws("/feed", fn
+  {:info, {:new_post, post}}, _socket -> {:reply, %{type: "post", title: post.title}}
+  {:received, _message}, _socket -> :noreply
+end)
+```
 
 ### Socket State
 

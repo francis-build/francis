@@ -61,7 +61,7 @@ defmodule FrancisTest do
 
   describe "ws/1" do
     setup do
-      port = Enum.random(5000..10_000)
+      port = Enum.random(8_001..12_000)
 
       on_exit(fn ->
         # Find the process listening on the port and send SIGINT

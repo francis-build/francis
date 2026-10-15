@@ -37,6 +37,7 @@ defmodule Mix.Tasks.Francis.ReleaseTest do
     assert File.exists?(@dockerfile)
     assert File.exists?(@dockerignore)
     dockerfile = File.read!(@dockerfile)
+    assert dockerfile =~ "ENV PORT=4000"
     assert dockerfile =~ "EXPOSE 4000"
     assert dockerfile =~ "mix release"
     assert dockerfile =~ "CMD [\"bin/francis\", \"start\"]"
@@ -51,6 +52,7 @@ defmodule Mix.Tasks.Francis.ReleaseTest do
     end)
 
     dockerfile = File.read!(@dockerfile)
+    assert dockerfile =~ "ENV PORT=1234"
     assert dockerfile =~ "EXPOSE 1234"
   end
 
@@ -60,6 +62,7 @@ defmodule Mix.Tasks.Francis.ReleaseTest do
     end)
 
     dockerfile = File.read!(@dockerfile)
+    assert dockerfile =~ "ENV PORT=5678"
     assert dockerfile =~ "EXPOSE 5678"
   end
 

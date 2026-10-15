@@ -5,7 +5,7 @@ defmodule FrancisSSETest do
 
   describe "sse/3" do
     setup do
-      %{port: Enum.random(5000..10_000)}
+      %{port: Enum.random(12_001..16_000)}
     end
 
     test "sets correct SSE response headers", %{port: port} do
@@ -720,6 +720,85 @@ defmodule FrancisSSETest do
 
       send(t2, "for client 2")
       assert_receive {_ref, {:data, "data: for client 2\n\n"}}, 1000
+    end
+
+    test "handler can use aliases from the router module", %{port: port} do
+      path = random_path()
+      parent_pid = self()
+
+      handler =
+        quote do
+          alias Francis.HTML, as: Escaper
+
+          sse(unquote(path), fn
+            :join, socket ->
+              send(unquote(parent_pid), {:transport, socket.transport})
+              :noreply
+
+            {:received, msg}, _socket ->
+              {:reply, Escaper.escape(msg)}
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      _resp = Req.get!("http://localhost:#{port}/#{path}", into: :self)
+      assert_receive {:transport, transport}, 1000
+
+      send(transport, "<b>")
+      assert_receive {_ref, {:data, "data: &lt;b&gt;\n\n"}}, 1000
+    end
+
+    test "line breaks in relayed messages cannot inject events", %{port: port} do
+      path = random_path()
+      parent_pid = self()
+
+      handler =
+        quote do
+          sse(unquote(path), fn
+            :join, socket ->
+              send(unquote(parent_pid), {:transport, socket.transport})
+              :noreply
+
+            {:received, msg}, _socket ->
+              {:reply, msg}
+          end)
+        end
+
+      mod = Support.RouteTester.generate_module(handler, bandit_opts: [port: port])
+      {:ok, _} = start_supervised(mod)
+
+      _resp = Req.get!("http://localhost:#{port}/#{path}", into: :self)
+      assert_receive {:transport, transport}, 1000
+
+      send(transport, "hi\n\nevent: admin\ndata: x")
+
+      assert_receive {_ref, {:data, "data: hi\ndata: \ndata: event: admin\ndata: data: x\n\n"}},
+                     1000
+    end
+  end
+
+  describe "format_event/1" do
+    test "splits multi-line data into one data field per line" do
+      assert IO.iodata_to_binary(Francis.SSE.format_event("a\nb\r\nc\rd")) ==
+               "data: a\ndata: b\ndata: c\ndata: d\n\n"
+    end
+
+    test "strips line breaks from event and id fields" do
+      event = %{event: "msg\n\ndata: forged", id: "1\r\nevent: admin", data: "ok"}
+
+      assert IO.iodata_to_binary(Francis.SSE.format_event(event)) ==
+               "id: 1event: admin\nevent: msgdata: forged\ndata: ok\n\n"
+    end
+
+    test "only emits retry when it is a non-negative integer" do
+      assert IO.iodata_to_binary(Francis.SSE.format_event(%{event: "e", data: "d", retry: 500})) ==
+               "event: e\ndata: d\nretry: 500\n\n"
+
+      assert IO.iodata_to_binary(
+               Francis.SSE.format_event(%{event: "e", data: "d", retry: "1\ndata: x"})
+             ) == "event: e\ndata: d\n\n"
     end
   end
 

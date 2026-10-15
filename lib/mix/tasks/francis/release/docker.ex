@@ -53,7 +53,8 @@ defmodule Mix.Tasks.Francis.Release.Docker do
   # Set environment variables
   ENV HOME=/app
 
-  # Expose port
+  # Francis binds to $PORT when bandit_opts sets no :port
+  ENV PORT=<%= @port %>
   EXPOSE <%= @port %>
 
   # Start the application

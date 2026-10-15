@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Francis.New do
       [
         app: :<%= app_name %>,
         version: "0.1.0",
-        elixir: "~> 1.18",
+        elixir: "~> 1.15",
         start_permanent: Mix.env() == :prod,
         deps: deps(),
         elixirc_paths: ["lib"]
@@ -117,7 +117,7 @@ defmodule Mix.Tasks.Francis.New do
 
   ## Usage
 
-      mix francis.new <app_name> [--sup [<supervisor_module_name>]]
+      mix francis.new <app_name> [--sup [<supervisor_module_name>] | --no-sup]
 
   ## Examples
 
@@ -134,7 +134,7 @@ defmodule Mix.Tasks.Francis.New do
   end
 
   def run([app_name | opts]) do
-    unless Regex.match?(~r/^[a-zA-Z][a-zA-Z0-9_]*$/, app_name) do
+    if !Regex.match?(~r/^[a-zA-Z][a-zA-Z0-9_]*$/, app_name) do
       Mix.raise(
         "Application name must only contain alphanumeric characters and underscores, and start with a letter"
       )
@@ -144,15 +144,13 @@ defmodule Mix.Tasks.Francis.New do
       Mix.raise("Directory `#{app_name}` already exists. Please choose a different name.")
     end
 
-    {sup, supervisor_module_name} =
+    {parsed, rest} =
       OptionParser.parse!(opts, strict: [sup: :boolean, supervisor_module_name: :string])
 
-    Mix.Generator.create_directory(app_name)
+    sup? = Keyword.get(parsed, :sup, false)
+    module_name = parsed[:supervisor_module_name] || List.first(rest) || app_name
 
-    module_name =
-      if supervisor_module_name == [],
-        do: app_name,
-        else: hd(supervisor_module_name)
+    Mix.Generator.create_directory(app_name)
 
     copy_template(:mix, Path.join(app_name, "mix.exs"), %{
       module_name: module_name,
@@ -173,7 +171,7 @@ defmodule Mix.Tasks.Francis.New do
 
     copy_template(:formatter, Path.join(app_name, ".formatter.exs"), %{})
 
-    if sup != [] && hd(sup) do
+    if sup? do
       copy_template(:with_sup_app, Path.join([app_name, "lib", app_name, "application.ex"]), %{
         module_name: module_name
       })

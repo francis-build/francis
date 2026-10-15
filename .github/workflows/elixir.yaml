@@ -15,16 +15,27 @@ permissions:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        otp: ["27.3.4"]
-        elixir: ["1.18.4"]
+        # `os` lives in each entry: a top-level key would let the second
+        # `include` overwrite the first instead of adding a new combination.
+        include:
+          # Latest supported toolchain: full suite plus lint/analysis/audit.
+          - os: ubuntu-latest
+            otp: "27.3.4"
+            elixir: "1.18.4"
+            lint: true
+          # Minimum supported toolchain (mix.exs declares `elixir: "~> 1.15"`): tests only.
+          - os: ubuntu-latest
+            otp: "26.2.5"
+            elixir: "1.15.8"
+            lint: false
 
     name: Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}} (${{matrix.os}})
     runs-on: ${{matrix.os}}
     steps:
       - name: ☁️ Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 💧 Setup Elixir
         uses: marmelasoft/elixir-setup@main
@@ -40,16 +51,20 @@ jobs:
         run: mix test --only e2e --all-warnings --warnings-as-errors
 
       - name: 💡 Lint the code
+        if: matrix.lint
         run: mix credo --strict --all
 
       - name: 🔍 Analyze code
+        if: matrix.lint
         run: mix dialyzer --format github
 
       - name: 🛡️ Search vulnerabilities
+        if: matrix.lint
         run: |
           mix hex.audit
           mix deps.audit
           mix sobelow --skip --exit --threshold high
 
       - name: ♻️ Check unused dependencies
+        if: matrix.lint
         run: mix deps.unlock --check-unused

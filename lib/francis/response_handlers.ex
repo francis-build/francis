@@ -12,7 +12,9 @@ defmodule Francis.ResponseHandlers do
 
   Only relative paths are accepted. Absolute URLs (e.g. `http://...`) will raise
   an `ArgumentError` to prevent open redirect vulnerabilities. Protocol-relative
-  URLs (e.g. `//evil.com`) are neutralized to `"/"`.
+  URLs (e.g. `//evil.com`) are neutralized to `"/"`, as are paths a browser could
+  normalise into one: paths containing a backslash (`/\\evil.com`), ASCII control
+  characters such as tab, CR or LF (`/\\t/evil.com`), or leading whitespace.
 
   ## Examples
 
@@ -59,7 +61,15 @@ defmodule Francis.ResponseHandlers do
     |> halt()
   end
 
-  defp validate_redirect_path("/" <> _ = path) do
+  # Browsers treat "\" as "/" and strip tab/CR/LF from URLs, so "/\evil.com" or
+  # "/\t/evil.com" would become the protocol-relative "//evil.com".
+  defp validate_redirect_path(path) when is_binary(path) do
+    if Regex.match?(~r/[\\\x00-\x1F\x7F]|^\s/, path),
+      do: "/",
+      else: validate_relative_path(path)
+  end
+
+  defp validate_relative_path("/" <> _ = path) do
     case URI.parse(path) do
       # Reject protocol-relative URLs like "//evil.com"
       %URI{host: nil} -> path
@@ -67,7 +77,7 @@ defmodule Francis.ResponseHandlers do
     end
   end
 
-  defp validate_redirect_path(path) when is_binary(path) do
+  defp validate_relative_path(path) do
     case URI.parse(path) do
       %URI{scheme: nil, host: nil} -> path
       _ -> raise ArgumentError, "redirect/2 only accepts relative paths, got: #{inspect(path)}"

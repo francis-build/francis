@@ -30,11 +30,19 @@ defmodule Francis.Plug.Router do
         do_match(conn, conn.method, Utils.decode_path_info!(conn), conn.host)
       rescue
         err ->
-          Logger.error("Failed to match route: #{conn.method} #{conn.request_path}")
+          # Client errors such as Plug.Router.MalformedURIError (400) keep their
+          # status; anything else (e.g. no matching clause) is a 404
+          status =
+            case Plug.Exception.status(err) do
+              client_error when client_error in 400..499 -> client_error
+              _ -> 404
+            end
+
+          Logger.warning("Failed to match route: #{conn.method} #{conn.request_path}")
 
           conn
           |> Plug.Conn.put_resp_content_type("text/html")
-          |> send_resp(404, Francis.ErrorPage.render(404))
+          |> send_resp(status, Francis.ErrorPage.render(status))
           |> halt()
       end
 

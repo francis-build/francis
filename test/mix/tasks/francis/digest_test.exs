@@ -278,9 +278,139 @@ defmodule Mix.Tasks.Francis.DigestTest do
         Digest.run([@test_assets_dir, "--output", @test_output_dir, "--age", "3600"])
       end)
 
-      # The age parameter is stored in opts but not directly used in file generation
-      # This test ensures the parameter is parsed correctly
-      assert File.exists?(Path.join(@test_output_dir, "cache_manifest.json"))
+      manifest =
+        @test_output_dir |> Path.join("cache_manifest.json") |> File.read!() |> Jason.decode!()
+
+      assert manifest["cache_control"] == "public, max-age=3600, immutable"
+    end
+
+    test "defaults cache_control to one year" do
+      capture_io(fn -> Digest.run([@test_assets_dir, "--output", @test_output_dir]) end)
+
+      manifest =
+        @test_output_dir |> Path.join("cache_manifest.json") |> File.read!() |> Jason.decode!()
+
+      assert manifest["cache_control"] == "public, max-age=31536000, immutable"
+    end
+
+    @tag :tmp_dir
+    test "running in place twice does not re-digest its own output", %{tmp_dir: tmp_dir} do
+      File.write!(Path.join(tmp_dir, "app.css"), "body { color: red; }")
+      File.mkdir_p!(Path.join(tmp_dir, "js"))
+      File.write!(Path.join(tmp_dir, "js/app.js"), "console.log(1)")
+
+      manifest_path = Path.join(tmp_dir, "cache_manifest.json")
+      list_files = fn -> tmp_dir |> Path.join("**/*") |> Path.wildcard() |> Enum.sort() end
+
+      capture_io(fn -> Digest.run([tmp_dir]) end)
+      first_files = list_files.()
+      first_manifest = manifest_path |> File.read!() |> Jason.decode!()
+
+      output = capture_io(fn -> Digest.run([tmp_dir]) end)
+      second_manifest = manifest_path |> File.read!() |> Jason.decode!()
+
+      assert output =~ "Generated 2 digested files"
+      assert list_files.() == first_files
+      assert second_manifest["files"] == first_manifest["files"]
+      assert Map.keys(second_manifest["files"]) == ["app.css", "js/app.js"]
+    end
+
+    @tag :tmp_dir
+    test "running in place with --clean drops digests of changed sources", %{tmp_dir: tmp_dir} do
+      css_path = Path.join(tmp_dir, "app.css")
+      File.write!(css_path, "body { color: red; }")
+      capture_io(fn -> Digest.run([tmp_dir]) end)
+
+      File.write!(css_path, "body { color: blue; }")
+      capture_io(fn -> Digest.run([tmp_dir, "--clean"]) end)
+      output = capture_io(fn -> Digest.run([tmp_dir, "--clean"]) end)
+
+      manifest = tmp_dir |> Path.join("cache_manifest.json") |> File.read!() |> Jason.decode!()
+
+      assert output =~ "Generated 1 digested files"
+      assert Map.keys(manifest["files"]) == ["app.css"]
+    end
+
+    @tag :tmp_dir
+    test "digests source .gz files and digest-looking vendor files", %{tmp_dir: tmp_dir} do
+      input = Path.join(tmp_dir, "in")
+      output = Path.join(tmp_dir, "out")
+      File.mkdir_p!(input)
+      File.write!(Path.join(input, "data.json.gz"), :zlib.gzip(~s({"a":1})))
+      File.write!(Path.join(input, "jquery.js"), "jquery()")
+      File.write!(Path.join(input, "jquery-1a2b3c4d5e6f.js"), "pinned_jquery()")
+
+      capture_io(fn -> Digest.run([input, "-o", output, "--no-gzip"]) end)
+      manifest = output |> Path.join("cache_manifest.json") |> File.read!() |> Jason.decode!()
+
+      assert Map.keys(manifest["files"]) == [
+               "data.json.gz",
+               "jquery-1a2b3c4d5e6f.js",
+               "jquery.js"
+             ]
+
+      for {_, %{"digested_path" => digested_path}} <- manifest["files"] do
+        assert File.regular?(Path.join(output, digested_path))
+      end
+    end
+
+    @tag :tmp_dir
+    test "running twice with output nested in input does not nest outputs", %{tmp_dir: tmp_dir} do
+      output = Path.join(tmp_dir, "assets")
+      File.write!(Path.join(tmp_dir, "app.css"), "body { color: red; }")
+      list_files = fn -> tmp_dir |> Path.join("**/*") |> Path.wildcard() |> Enum.sort() end
+
+      capture_io(fn -> Digest.run([tmp_dir, "-o", output]) end)
+      first_files = list_files.()
+
+      run_output = capture_io(fn -> Digest.run([tmp_dir, "-o", output]) end)
+      manifest = output |> Path.join("cache_manifest.json") |> File.read!() |> Jason.decode!()
+
+      assert run_output =~ "Generated 1 digested files"
+      assert list_files.() == first_files
+      assert Map.keys(manifest["files"]) == ["app.css"]
+
+      # A changed source leaves its old digest behind, no longer listed in the manifest
+      File.write!(Path.join(tmp_dir, "app.css"), "body { color: blue; }")
+      capture_io(fn -> Digest.run([tmp_dir, "-o", output]) end)
+      run_output = capture_io(fn -> Digest.run([tmp_dir, "-o", output]) end)
+      manifest = output |> Path.join("cache_manifest.json") |> File.read!() |> Jason.decode!()
+
+      assert run_output =~ "Generated 1 digested files"
+      assert Map.keys(manifest["files"]) == ["app.css"]
+      refute File.exists?(Path.join(output, "assets"))
+    end
+
+    @tag :tmp_dir
+    test "--clean never deletes outside the output dir", %{tmp_dir: tmp_dir} do
+      input = Path.join(tmp_dir, "in")
+      output = Path.join(tmp_dir, "out")
+      outside = Path.join(tmp_dir, "keep.txt")
+      File.mkdir_p!(input)
+      File.mkdir_p!(output)
+      File.write!(Path.join(input, "app.css"), "body {}")
+      File.write!(outside, "precious")
+      File.write!(Path.join(output, "victim.css"), "x")
+
+      malicious = %{
+        "files" => %{
+          "a.css" => %{"digested_path" => "../keep.txt", "gzipped" => %{"path" => outside}},
+          "b.css" => %{"digested_path" => nil},
+          "c.css" => %{"digested_path" => "victim.css"}
+        }
+      }
+
+      File.write!(Path.join(output, "cache_manifest.json"), Jason.encode!(malicious))
+
+      {result, run_output} =
+        with_io(:stderr, fn ->
+          capture_io(fn -> Digest.run([input, "-o", output, "--clean"]) end)
+        end)
+
+      assert result =~ "Cleaned 1 previously digested files"
+      assert run_output =~ "Skipping unsafe manifest path"
+      assert File.read!(outside) == "precious"
+      refute File.exists?(Path.join(output, "victim.css"))
     end
 
     test "preserves file modification times" do
