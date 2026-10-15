@@ -12,32 +12,71 @@ env:
 permissions:
   contents: read
 
+# A newer push to the same branch or PR supersedes the running matrix.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Test (Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }})
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        otp: ["27.3.4"]
-        elixir: ["1.18.4"]
-
-    name: Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}} (${{matrix.os}})
-    runs-on: ${{matrix.os}}
+        # Every Elixir minor allowed by mix.exs (`~> 1.15`), each against the
+        # oldest and newest Erlang/OTP it supports, per
+        # https://hexdocs.pm/elixir/compatibility-and-deprecations.html
+        # Versions are loose: `1.19` / `28` resolve to the latest patch release.
+        # OTP 24 (end-of-life) is skipped: the test-only HTTP client (Finch)
+        # needs OTP 25+.
+        include:
+          - { elixir: "1.15", otp: "25" }
+          - { elixir: "1.15", otp: "26" }
+          - { elixir: "1.16", otp: "25" }
+          - { elixir: "1.16", otp: "26" }
+          - { elixir: "1.17", otp: "25" }
+          - { elixir: "1.17", otp: "27" }
+          - { elixir: "1.18", otp: "25" }
+          - { elixir: "1.18", otp: "27" }
+          - { elixir: "1.19", otp: "26" }
+          - { elixir: "1.19", otp: "28" }
+          - { elixir: "1.20", otp: "27" }
+          - { elixir: "1.20", otp: "29" }
     steps:
       - name: ☁️ Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 💧 Setup Elixir
         uses: marmelasoft/elixir-setup@main
         with:
-          otp-version: ${{matrix.otp}}
-          elixir-version: ${{matrix.elixir}}
-          cache-plts: true
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
 
       - name: 🔬 Run unit tests
         run: mix test --exclude e2e --all-warnings --warnings-as-errors
 
       - name: 🌐 Run e2e tests
         run: mix test --only e2e --all-warnings --warnings-as-errors
+
+  # Static checks don't depend on the runtime version, so they run once, on
+  # the newest toolchain, in parallel with the test matrix.
+  lint:
+    name: Lint and analysis (Elixir 1.20 / OTP 29)
+    runs-on: ubuntu-latest
+    steps:
+      - name: ☁️ Checkout repository
+        uses: actions/checkout@v7
+
+      - name: 💧 Setup Elixir
+        uses: marmelasoft/elixir-setup@main
+        with:
+          otp-version: "29"
+          elixir-version: "1.20"
+          cache-plts: true
+
+      - name: 🎨 Check formatting
+        run: mix format --check-formatted
 
       - name: 💡 Lint the code
         run: mix credo --strict --all

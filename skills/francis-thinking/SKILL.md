@@ -136,7 +136,7 @@ ws("/live", handler_fn, heartbeat_interval: 10_000, timeout: 120_000)
 - `{:received, message}` — client sent a text message over the wire
 - `{:close, reason}` — connection closed
 
-**`:join` and `{:close, _}` are optional** — succeed silently if unmatched. Easy to lose cleanup logic on close.
+**`:join`, `{:close, _}` and `{:info, _}` are optional** — succeed silently if the handler has no clause for them (also when it delegates unchanged, e.g. `fn e, s -> MyApp.Socket.handle(e, s) end`). A `FunctionClauseError` raised deeper in your code is a real error and is not swallowed. Easy to lose cleanup logic on close.
 
 **Socket state:**
 ```elixir
@@ -148,14 +148,14 @@ ws("/live", handler_fn, heartbeat_interval: 10_000, timeout: 120_000)
 }
 ```
 
-**`send(socket.transport, msg)` for WS bypasses the handler entirely.** Messages are forwarded directly to the client. They do NOT pass through your `{:received, _}` clause. Store `socket.transport` to broadcast from other processes.
+**`send(socket.transport, msg)` for WS is delivered to the handler as `{:info, msg}` first.** If the handler has no `{:info, _}` clause, frame-shaped messages (binary, map, list, `{type, payload}`) go straight to the client and anything else is logged and dropped. They never reach `{:received, _}`, which only gets client frames. Store `socket.transport` to broadcast from other processes.
 
 **Options:**
 - `:heartbeat_interval` (default: 30_000 ms) — ping frames; `nil` to disable
 - `:timeout` (default: 60_000 ms) — idle connection timeout
 - `:max_frame_size` (default: 65_536 bytes) — memory protection
 
-**Module name collision:** each `ws/3` call generates a module named from the route path. Two routes with structurally identical paths generate the same module name and silently overwrite each other.
+Handlers are compiled inline in the router, so aliases, imports and module attributes from the router work inside `ws`/`sse` handlers.
 
 ---
 
@@ -178,7 +178,7 @@ end)
 sse("/stream", handler_fn, keepalive_interval: 30_000)
 ```
 
-**`send(socket.transport, msg)` for SSE routes through the handler's `{:received, msg}` clause** — unlike WS where it bypasses the handler. You can transform or filter messages before they reach the client.
+**`send(socket.transport, msg)` for SSE routes through the handler's `{:received, msg}` clause** — WS uses `{:info, msg}` for the same thing, because its `{:received, _}` is taken by client frames. You can transform or filter messages before they reach the client. Multi-line data is split into one `data:` line per line, and line breaks are stripped from `event`/`id`, so relayed text cannot inject events.
 
 Real close reasons include `:chunk_failed` (client disconnected) and `:keepalive_failed`. Use `{:close, _}` to clean up subscriptions.
 
@@ -191,7 +191,7 @@ Real close reasons include `:chunk_failed` (client disconnected) and `:keepalive
 # => data: {"status":"ok"}\n\n
 
 {:reply, %{event: "user_joined", data: %{name: "Alice"}, id: "42", retry: 5000}}
-# => event: user_joined\ndata: {...}\nid: 42\nretry: 5000\n\n
+# => id: 42\nevent: user_joined\ndata: {...}\nretry: 5000\n\n
 ```
 
 **Options:**
@@ -201,7 +201,7 @@ Real close reasons include `:chunk_failed` (client disconnected) and `:keepalive
 
 | | WS `send(socket.transport, msg)` | SSE `send(socket.transport, msg)` |
 |---|---|---|
-| Routes through handler? | No — sent directly to client | Yes — delivered to `{:received, msg}` |
+| Routes through handler? | Yes — `{:info, msg}`; forwarded as-is if unmatched | Yes — delivered to `{:received, msg}` |
 | `{:received, _}` source | Client text frames over the wire | Other processes only |
 
 ---
@@ -281,7 +281,7 @@ defmodule MyApp do
 end
 ```
 
-The error handler receives both `{:error, reason}` tuples and raised exceptions. If the error handler itself raises, Francis catches it and renders the default 500 page.
+The error handler receives `{:error, reason}` tuples, exceptions (raised in routes or earlier in the pipeline, e.g. `Plug.Parsers.ParseError`), or `{kind, reason}` for throws and exits. The default page uses the exception status (`plug_status`): 400 for malformed JSON, 500 otherwise. If the error handler itself raises, Francis logs both errors and renders the default page.
 
 ---
 
@@ -290,6 +290,8 @@ The error handler receives both `{:error, reason}` tuples and raised exceptions.
 Keys valid in both `use Francis` opts and `config.exs`: `bandit_opts`, `static`, `log_level`, `error_handler`, `parser`.
 
 `dev: true` is **only read from `config.exs`**, never from `use Francis` opts. If both locations set the same key, `use` opts win and a warning is logged.
+
+`bandit_opts` is read at boot and `error_handler` per error (`runtime.exs` works for both). `static`, `parser`, `log_level` are compile-time (`Application.compile_env`). Without a `:port` in `bandit_opts`, the `PORT` env var is used. `static: false` disables static serving.
 
 ```elixir
 config :francis,
@@ -378,11 +380,10 @@ Always prefix mix commands with `unbuffer`: `unbuffer mix test`
 | Rendering user input in HTML | `html(conn, "<p>#{Francis.HTML.escape(input)}</p>")` |
 | Rendering untrusted text | `safe_html(conn, input)` — escapes entire string; do NOT wrap in markup |
 | SSE pushing from handler | SSE is server→client; push via `send(socket.transport, msg)` from another process |
-| WS broadcasting from another process | `send(socket.transport, msg)` bypasses handler — goes direct to client |
+| WS broadcasting from another process | `send(socket.transport, msg)` → `{:info, msg}` clause, or straight to the client if unmatched |
 | Forgetting `:close` handler | Silent success — add `{:close, _}` to clean up subscriptions and ETS entries |
 | Absolute URL in `redirect` | Francis raises `ArgumentError` — relative paths only |
 | `dev: true` not working | Only valid in `config.exs`, not in `use Francis` opts |
 | Auth inside a route handler | Move to a `plug` before routes, or scope with `forward/2` |
 | `body_params` is `%{}` | Caller must send a matching `content-type` header |
-| Two ws/sse routes with same path shape | Generate the same module name — silently overwrite each other |
 | `unmatched/1` not catching routes | Must be declared **last** — shadows everything after it |

@@ -14,7 +14,7 @@ defmodule Francis do
           json_decoder: Jason
         )
         ```
-    * Defines a default error handler that returns a 500 status code and a generic error message. You can override this by passing the function name on `:error_handler` option to the `use Francis` macro which will override the default error handler.
+    * Defines a default error handler that renders an HTML error page with the status of the raised exception (500 for `{:error, _}` and exceptions without a `plug_status`). You can override this by passing the function name on `:error_handler` option to the `use Francis` macro which will override the default error handler.
 
   You can also set the following options:
     * :bandit_opts - Options to be passed to Bandit
@@ -25,12 +25,6 @@ defmodule Francis do
   """
   require Logger
   import Plug.Conn
-
-  @default_heartbeat_interval 30_000
-  @default_ws_timeout 60_000
-  @default_max_frame_size 65_536
-
-  @default_sse_keepalive_interval 15_000
 
   defmacro __using__(opts \\ []) do
     quote location: :keep do
@@ -45,15 +39,35 @@ defmodule Francis do
 
       def start, do: start(:normal, [])
 
-      static = get_configuration(:static, unquote(opts), from: "priv/static", at: "/")
+      # Plugs are built at compile time, so these keys are read with
+      # compile_env: Mix recompiles the router when they change, and a
+      # runtime.exs override fails loudly at boot instead of being ignored.
+      static =
+        Francis.resolve_configuration(
+          :static,
+          Keyword.get(unquote(opts), :static),
+          Application.compile_env(:francis, :static),
+          from: "priv/static",
+          at: "/",
+          gzip: true
+        )
 
       parser =
-        get_configuration(:parser, unquote(opts),
+        Francis.resolve_configuration(
+          :parser,
+          Keyword.get(unquote(opts), :parser),
+          Application.compile_env(:francis, :parser),
           parsers: [:urlencoded, :multipart, :json],
           json_decoder: Jason
         )
 
-      log_level = get_configuration(:log_level, unquote(opts), :info)
+      log_level =
+        Francis.resolve_configuration(
+          :log_level,
+          Keyword.get(unquote(opts), :log_level),
+          Application.compile_env(:francis, :log_level),
+          :info
+        )
 
       if static, do: plug(Plug.Static, static)
 
@@ -66,10 +80,14 @@ defmodule Francis do
         dev = Application.get_env(:francis, :dev, false)
         watcher_spec = if dev, do: [{Francis.Watcher, []}], else: []
 
-        children =
-          [
-            {Bandit, [plug: __MODULE__] ++ Keyword.get(unquote(opts), :bandit_opts, [])}
-          ] ++ watcher_spec
+        # Read at runtime so values injected after compilation (e.g. a `PORT`
+        # set in runtime.exs) are honoured.
+        bandit_opts =
+          :bandit_opts
+          |> Francis.get_configuration(unquote(opts), [])
+          |> Francis.put_env_port()
+
+        children = [{Bandit, [plug: __MODULE__] ++ bandit_opts}] ++ watcher_spec
 
         Supervisor.start_link(children, strategy: :one_for_one)
       end
@@ -115,33 +133,16 @@ defmodule Francis do
         e -> handle_errors(conn, e)
       end
 
-      # Error handling chain: custom handler -> fallback to generic 500 page.
-      # If the custom error handler itself raises, we catch that and still
-      # return a 500 page to avoid crashing the connection.
       @spec handle_errors(Plug.Conn.t(), any()) :: Plug.Conn.t()
       @impl true
       def handle_errors(conn, reason) do
-        error_handler = Keyword.get(unquote(opts), :error_handler)
+        # Read per error so runtime.exs works; the macro option wins. No
+        # "both set" warning here, as it would be logged on every error.
+        error_handler =
+          Keyword.get(unquote(opts), :error_handler) ||
+            Application.get_env(:francis, :error_handler)
 
-        case error_handler do
-          nil ->
-            Logger.error("Unhandled error: #{inspect(reason)}")
-            internal_server_error(conn)
-
-          handler ->
-            handler.(conn, reason)
-        end
-      rescue
-        e ->
-          Logger.error("Unhandled error: #{inspect(e)}")
-          internal_server_error(conn)
-      end
-
-      defp internal_server_error(conn) do
-        conn
-        |> put_resp_content_type("text/html")
-        |> send_resp(500, Francis.ErrorPage.render(500))
-        |> halt()
+        Francis.handle_error(conn, reason, error_handler)
       end
     end
   end
@@ -191,8 +192,12 @@ defmodule Francis do
   - `:join` - Sent when a client connects. Return `{:reply, message}` to send a welcome message.
   - `{:close, reason}` - Sent when the connection closes. Return `:ok` or `:noreply`.
   - `{:received, message}` - Regular WebSocket text messages from the client.
+  - `{:info, message}` - Messages sent to `socket.transport` from other processes
+    (e.g. PubSub broadcasts or monitor `:DOWN` messages). Optional.
 
-  Messages sent via `send(socket.transport, message)` are automatically forwarded to the client.
+  When the handler has no `{:info, _}` clause, messages sent via
+  `send(socket.transport, message)` are forwarded to the client as-is if they are
+  a binary, map, list or `{type, payload}` frame; anything else is logged and dropped.
 
   ## Return Values
 
@@ -241,7 +246,7 @@ defmodule Francis do
 
       {:received, message}, socket ->
         room = socket.params["room"]
-        # Broadcast to self (will be forwarded to client)
+        # Without an {:info, _} clause, this is forwarded to the client as-is
         send(socket.transport, "Someone said: " <> message)
         {:reply, "[" <> room <> "] " <> message}
     end
@@ -272,93 +277,16 @@ defmodule Francis do
 
   @spec ws(
           String.t(),
-          (event :: :join | {:close, term()} | {:received, binary()},
+          (event :: :join | {:close, term()} | {:received, binary()} | {:info, term()},
            socket :: %{id: binary(), transport: pid(), path: binary(), params: map()} ->
              {:reply, binary() | map() | {atom(), any()}} | :noreply | :ok),
           Keyword.t()
         ) :: Macro.t()
   defmacro ws(path, handler, opts \\ []) do
-    module_name = generate_ws_module_name(path)
-    handler_ast = build_ws_handler_ast(module_name, handler)
-
-    Code.compile_quoted(handler_ast)
-
     quote location: :keep do
       get(unquote(path), fn conn ->
-        socket_state = %{
-          id: 32 |> :crypto.strong_rand_bytes() |> Base.encode16(),
-          path: conn.request_path,
-          params: conn.params
-        }
-
-        heartbeat_interval =
-          Keyword.get(unquote(opts), :heartbeat_interval, unquote(@default_heartbeat_interval))
-
-        conn
-        |> var!()
-        |> WebSockAdapter.upgrade(
-          unquote(module_name),
-          Map.put(socket_state, :heartbeat_interval, heartbeat_interval),
-          timeout: Keyword.get(unquote(opts), :timeout, unquote(@default_ws_timeout)),
-          max_frame_size:
-            Keyword.get(unquote(opts), :max_frame_size, unquote(@default_max_frame_size))
-        )
-        |> halt()
+        Francis.Websocket.upgrade(conn, unquote(handler), unquote(opts))
       end)
-    end
-  end
-
-  # Private helper functions for WebSocket macro
-  defp generate_ws_module_name(path) do
-    path
-    |> URI.parse()
-    |> Map.get(:path)
-    |> String.split("/")
-    |> Enum.map_join(".", &Macro.camelize/1)
-    |> then(&Module.concat([__MODULE__, &1]))
-  end
-
-  defp build_ws_handler_ast(module_name, handler) do
-    quote do
-      defmodule unquote(module_name) do
-        require Logger
-
-        def init(opts) do
-          state =
-            opts
-            |> Map.put(:transport, self())
-            |> Francis.Websocket.setup_heartbeat()
-
-          send(self(), :__francis_join__)
-          {:ok, state}
-        end
-
-        def handle_control({_payload, [opcode: :ping]}, state), do: {:ok, state}
-        def handle_control({_payload, [opcode: :pong]}, state), do: {:ok, state}
-
-        def handle_in({message, _opts}, state) do
-          unquote(handler).({:received, message}, state)
-          |> Francis.Websocket.format_response(state)
-        rescue
-          e ->
-            Logger.error("WS Handler error: #{inspect(e)}")
-            {:stop, :error, state}
-        end
-
-        def handle_info(:__francis_join__, state),
-          do: Francis.Websocket.call_join(unquote(handler), state)
-
-        def handle_info(:__francis_heartbeat__, state),
-          do: Francis.Websocket.handle_heartbeat(state)
-
-        def handle_info(msg, state), do: Francis.Websocket.format_response({:reply, msg}, state)
-
-        def terminate(reason, state) do
-          Francis.Websocket.cancel_heartbeat(state)
-          Francis.Websocket.call_close(unquote(handler), {:close, reason}, state)
-          :ok
-        end
-      end
     end
   end
 
@@ -440,48 +368,10 @@ defmodule Francis do
           Keyword.t()
         ) :: Macro.t()
   defmacro sse(path, handler, opts \\ []) do
-    module_name = generate_sse_module_name(path)
-    handler_ast = build_sse_handler_ast(module_name, handler)
-
-    Code.compile_quoted(handler_ast)
-
     quote location: :keep do
       get(unquote(path), fn conn ->
-        socket_state = %{
-          id: 32 |> :crypto.strong_rand_bytes() |> Base.encode16(),
-          path: conn.request_path,
-          params: conn.params
-        }
-
-        keepalive_interval =
-          Keyword.get(
-            unquote(opts),
-            :keepalive_interval,
-            unquote(@default_sse_keepalive_interval)
-          )
-
-        state = Map.put(socket_state, :keepalive_interval, keepalive_interval)
-
-        unquote(module_name).run(conn, state)
+        Francis.SSE.run(conn, unquote(handler), unquote(opts))
       end)
-    end
-  end
-
-  defp generate_sse_module_name(path) do
-    path
-    |> URI.parse()
-    |> Map.get(:path)
-    |> String.split("/")
-    |> Enum.map_join(".", &Macro.camelize/1)
-    |> then(&Module.concat([__MODULE__, "SSE", &1]))
-  end
-
-  defp build_sse_handler_ast(module_name, handler) do
-    quote do
-      defmodule unquote(module_name) do
-        @doc false
-        def run(conn, state), do: Francis.SSE.run(conn, state, unquote(handler))
-      end
     end
   end
 
@@ -502,17 +392,85 @@ defmodule Francis do
   """
   @spec get_configuration(atom(), Keyword.t(), any()) :: any()
   def get_configuration(key, opts, default) do
-    opts = Keyword.get(opts, key)
-    config = Application.get_env(:francis, key)
+    resolve_configuration(
+      key,
+      Keyword.get(opts, key),
+      Application.get_env(:francis, key),
+      default
+    )
+  end
 
-    if opts && config do
-      Logger.warning(
-        "Both application configuration and macro option provided for #{key}. Using macro option."
-      )
+  @doc false
+  # `nil` means "not set"; `false` is a real value (e.g. `static: false` disables static serving).
+  @spec resolve_configuration(atom(), any(), any(), any()) :: any()
+  def resolve_configuration(_key, nil, nil, default), do: default
+  def resolve_configuration(_key, nil, config, _default), do: config
+  def resolve_configuration(_key, macro, nil, _default), do: macro
 
-      opts
-    else
-      opts || config || default
+  def resolve_configuration(key, macro, _config, _default) do
+    Logger.warning(
+      "Both application configuration and macro option provided for #{key}. Using macro option."
+    )
+
+    macro
+  end
+
+  @doc false
+  # Falls back to the `PORT` environment variable when no port was configured,
+  # so releases and containers can pick the port at boot.
+  @spec put_env_port(Keyword.t()) :: Keyword.t()
+  def put_env_port(bandit_opts) do
+    case {Keyword.has_key?(bandit_opts, :port), System.get_env("PORT", "")} do
+      {false, port} when port != "" -> Keyword.put(bandit_opts, :port, parse_port!(port))
+      _ -> bandit_opts
     end
+  end
+
+  defp parse_port!(value) do
+    case Integer.parse(String.trim(value)) do
+      {port, ""} when port in 0..65_535 ->
+        port
+
+      _ ->
+        raise ArgumentError,
+              "PORT environment variable must be a port number, got: #{inspect(value)}"
+    end
+  end
+
+  @doc false
+  # Error handling chain: custom handler -> fallback to the generic error page.
+  # `Plug.ErrorHandler` hands over `%{kind:, reason:, stack:}` for errors raised
+  # outside route handlers (e.g. parsers); these are unwrapped so a custom
+  # handler always receives an exception, an `{:error, _}` tuple, or
+  # `{kind, reason}` for throws and exits.
+  @spec handle_error(Plug.Conn.t(), any(), (Plug.Conn.t(), any() -> Plug.Conn.t()) | nil) ::
+          Plug.Conn.t()
+  def handle_error(conn, %{kind: :error, reason: reason, stack: _}, handler),
+    do: handle_error(conn, reason, handler)
+
+  def handle_error(conn, %{kind: kind, reason: reason, stack: _}, handler),
+    do: handle_error(conn, {kind, reason}, handler)
+
+  def handle_error(conn, reason, nil), do: render_error(conn, reason)
+
+  # If the custom error handler itself raises, still render an error page
+  # rather than crashing the connection.
+  def handle_error(conn, reason, handler) do
+    handler.(conn, reason)
+  rescue
+    e ->
+      Logger.error("Error handler raised #{inspect(e)} while handling #{inspect(reason)}")
+      render_error(conn, e)
+  end
+
+  defp render_error(conn, reason) do
+    status = if is_exception(reason), do: Plug.Exception.status(reason), else: 500
+    level = if status >= 500, do: :error, else: :warning
+    Logger.log(level, "Unhandled error: #{inspect(reason)}")
+
+    conn
+    |> put_resp_content_type("text/html")
+    |> send_resp(status, Francis.ErrorPage.render(status))
+    |> halt()
   end
 end

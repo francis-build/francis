@@ -19,7 +19,8 @@ defmodule Mix.Tasks.Francis.Digest do
       Defaults to the input path.
 
     * `--age` - sets the cache control max age in seconds for static assets.
-      This value is used for cache headers. Defaults to 31536000 (1 year).
+      Stored in the manifest as `"cache_control" => "public, max-age=<age>, immutable"`
+      and exposed through `Francis.Static.cache_control/1`. Defaults to 31536000 (1 year).
 
     * `--gzip` - when set to false, does not generate gzipped files.
       Defaults to true.
@@ -35,6 +36,12 @@ defmodule Mix.Tasks.Francis.Digest do
 
   The output will be a set of digested files along with a cache manifest file.
   The manifest file maps original file names to their digested counterparts.
+
+  Running the task again is safe: the manifest at the output root, the files it
+  lists (digested and gzipped) and, when the output directory lives inside the
+  input directory, everything under the output directory are never digested
+  again. Digested files dropped from the manifest by a later run are treated as
+  sources; use `--clean` to remove them.
 
   ## Examples
 
@@ -74,16 +81,19 @@ defmodule Mix.Tasks.Francis.Digest do
 
     File.mkdir_p!(output_path)
 
+    manifest_path = Path.join(output_path, "cache_manifest.json")
+    # Read before cleaning so previous outputs are still recognised when input == output
+    skipped = generated_paths(input_path, output_path, manifest_path)
+
     if opts[:clean], do: clean_old_digests(output_path)
 
     Mix.shell().info("Generating digested files from #{input_path} to #{output_path}")
 
     exclude_regexes = compile_exclude_patterns(opts[:exclude] || [])
-    files = collect_files(input_path, exclude_regexes)
+    files = collect_files(input_path, exclude_regexes, skipped)
     digested_files = Enum.map(files, &digest_file(&1, input_path, output_path, opts))
 
-    manifest_path = Path.join(output_path, "cache_manifest.json")
-    Manifest.write(manifest_path, digested_files)
+    Manifest.write(manifest_path, digested_files, cache_control: cache_control(opts[:age]))
 
     Mix.shell().info("Generated #{length(digested_files)} digested files")
     Mix.shell().info("Manifest written to #{manifest_path}")
@@ -121,21 +131,44 @@ defmodule Mix.Tasks.Francis.Digest do
 
     with {:ok, content} <- File.read(manifest_path),
          {:ok, %{"files" => files}} <- Jason.decode(content) do
-      count =
-        Enum.reduce(files, 0, fn {_, info}, acc ->
-          digested = Path.join(output_path, info["digested_path"])
-          deleted = if File.rm(digested) == :ok, do: 1, else: 0
-
-          if gzip_path = get_in(info, ["gzipped", "path"]) do
-            File.rm(Path.join(output_path, gzip_path))
-          end
-
-          acc + deleted
-        end)
+      count = Enum.count(files, fn {_, info} -> remove_digested(output_path, info) end)
 
       File.rm(manifest_path)
       Mix.shell().info("Cleaned #{count} previously digested files")
     end
+  end
+
+  # Returns whether the digested file itself was removed; the gzip variant is best-effort.
+  defp remove_digested(output_path, info) do
+    with {:ok, gzip_path} <- safe_output_path(output_path, get_in(info, ["gzipped", "path"])) do
+      File.rm(gzip_path)
+    end
+
+    case safe_output_path(output_path, info["digested_path"]) do
+      {:ok, digested_path} -> File.rm(digested_path) == :ok
+      :error -> false
+    end
+  end
+
+  # Manifest entries come from disk, so only paths that stay inside output_path are touched
+  defp safe_output_path(_output_path, nil), do: :error
+
+  # Hand-rolled rather than Path.safe_relative/2, which needs Elixir 1.16.
+  defp safe_output_path(output_path, relative_path) when is_binary(relative_path) do
+    root = Path.expand(output_path)
+    full_path = Path.expand(relative_path, root)
+
+    if Path.type(relative_path) == :relative and String.starts_with?(full_path, root <> "/") do
+      {:ok, full_path}
+    else
+      Mix.shell().error("Skipping unsafe manifest path #{inspect(relative_path)}")
+      :error
+    end
+  end
+
+  defp safe_output_path(_output_path, relative_path) do
+    Mix.shell().error("Skipping invalid manifest path #{inspect(relative_path)}")
+    :error
   end
 
   defp process_exclude_patterns(opts) do
@@ -162,12 +195,54 @@ defmodule Mix.Tasks.Francis.Digest do
     end)
   end
 
-  defp collect_files(input_path, exclude_regexes) do
+  defp cache_control(age), do: "public, max-age=#{age}, immutable"
+
+  # Outputs of previous runs that must never be digested again: the manifest itself, every
+  # file it lists and, when output_path is nested inside input_path, the whole output tree.
+  defp generated_paths(input_path, output_path, manifest_path) do
+    expanded_input = Path.expand(input_path)
+    expanded_output = Path.expand(output_path)
+
+    nested_output =
+      if expanded_output != expanded_input and
+           String.starts_with?(expanded_output, expanded_input <> "/") do
+        expanded_output
+      end
+
+    files =
+      [Path.expand(manifest_path) | previous_manifest_paths(expanded_output, manifest_path)]
+      |> MapSet.new()
+
+    %{files: files, nested_output: nested_output}
+  end
+
+  defp previous_manifest_paths(expanded_output, manifest_path) do
+    with {:ok, content} <- File.read(manifest_path),
+         {:ok, %{"files" => files}} when is_map(files) <- Jason.decode(content) do
+      files
+      |> Enum.flat_map(fn {_, info} ->
+        [info["digested_path"], get_in(info, ["gzipped", "path"])]
+      end)
+      |> Enum.filter(&is_binary/1)
+      |> Enum.map(&Path.expand(&1, expanded_output))
+    else
+      _ -> []
+    end
+  end
+
+  defp collect_files(input_path, exclude_regexes, skipped) do
     input_path
     |> Path.join("**/*")
     |> Path.wildcard()
     |> Enum.filter(&File.regular?/1)
-    |> Enum.reject(&should_exclude?(&1, exclude_regexes))
+    |> Enum.reject(&(generated?(&1, skipped) or should_exclude?(&1, exclude_regexes)))
+  end
+
+  defp generated?(file_path, %{files: files, nested_output: nested_output}) do
+    expanded_path = Path.expand(file_path)
+
+    MapSet.member?(files, expanded_path) or
+      (is_binary(nested_output) and String.starts_with?(expanded_path, nested_output <> "/"))
   end
 
   defp should_exclude?(file_path, exclude_regexes) do

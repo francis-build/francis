@@ -4,7 +4,7 @@ defmodule FrancisE2ETest do
   @moduletag :e2e
 
   setup do
-    port = Enum.random(10_000..20_000)
+    port = Enum.random(16_001..20_000)
 
     on_exit(fn ->
       case System.cmd("lsof", ["-ti", ":#{port}"], stderr_to_stdout: true) do

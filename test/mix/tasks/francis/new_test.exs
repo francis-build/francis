@@ -81,6 +81,22 @@ defmodule Mix.Tasks.Francis.NewTest do
     end)
   end
 
+  test "creates a non-supervised project with --no-sup", %{tmp_dir: tmp_dir} do
+    File.cd!(tmp_dir, fn ->
+      app_name = "my_no_sup_app"
+
+      capture_io(fn -> New.main([app_name, "--no-sup"]) end)
+
+      refute File.exists?(Path.join([app_name, "lib", app_name, "application.ex"]))
+      refute File.exists?(Path.join([app_name, "lib", app_name, "router.ex"]))
+
+      app_content = File.read!(Path.join([app_name, "lib", app_name, "#{app_name}.ex"]))
+      assert app_content =~ "defmodule MyNoSupApp do"
+      assert app_content =~ "use Francis"
+      refute app_content =~ "use Application"
+    end)
+  end
+
   test "raises if app already exists", %{tmp_dir: tmp_dir} do
     File.cd!(tmp_dir, fn ->
       app_name = "existing_app"

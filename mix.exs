@@ -1,7 +1,7 @@
 defmodule Francis.MixProject do
   use Mix.Project
 
-  @version "0.3.3"
+  @version "0.4.0"
   @description "Boilerplate killer using Plug with Bandit to quickly build endpoints, websocket and SSE listeners"
   @scm_url "https://github.com/francis-build/francis"
 
@@ -11,7 +11,7 @@ defmodule Francis.MixProject do
       app: :francis,
       version: @version,
       description: @description,
-      elixir: "~> 1.14",
+      elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
@@ -19,7 +19,10 @@ defmodule Francis.MixProject do
       source_url: @scm_url,
       elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: dialyzer(),
-      escript: escript()
+      escript: escript(),
+      # Accepted for now: HTTP/2 flow-control issue in Bandit with no patched
+      # release yet. Remove once Bandit ships a fix.
+      hex: [ignore_advisories: ["EEF-CVE-2026-105659"]]
     ]
   end
 
@@ -34,6 +37,7 @@ defmodule Francis.MixProject do
         "test",
         "mix.exs",
         "README*",
+        "CHANGELOG*",
         "LICENSE*"
       ],
       maintainers: ["Filipe Cabaço"],
@@ -45,7 +49,7 @@ defmodule Francis.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md"],
+      extras: ["README.md", "CHANGELOG.md"],
       formatters: ["html", "epub"],
       source_ref: "v#{@version}"
     ]

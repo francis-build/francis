@@ -12,7 +12,9 @@ defmodule Mix.Tasks.Francis.Release do
 
   ## Command line options
 
-    * `-p`, `--port <port>` - Port to expose in the Docker container (default: 4000).
+    * `-p`, `--port <port>` - Port the container listens on (default: 4000). Sets both
+      `ENV PORT` and `EXPOSE` in the Dockerfile; Francis reads `PORT` at runtime when
+      `bandit_opts` does not set `:port`.
     * `--elixir-version <version>` - Elixir version to use in the Docker image (default: 1.18.4).
     * `--otp-version <version>` - Erlang/OTP version to use in the Docker image (default: 27.3.4).
 
@@ -20,7 +22,7 @@ defmodule Mix.Tasks.Francis.Release do
 
       mix francis.release --port 8080 --elixir-version 1.16.2 --otp-version 26.2.1
 
-  This will generate a Dockerfile exposing port 8080 and using the specified
+  This will generate a Dockerfile that sets `PORT=8080`, exposes port 8080 and uses the specified
   Elixir and OTP versions. If you use some combination of versions that are not
   compatible it will fail when building the docker image.
 
