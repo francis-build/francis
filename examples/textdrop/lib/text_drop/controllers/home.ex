@@ -6,9 +6,11 @@ defmodule TextDrop.Controllers.Home do
   alias TextDrop.Handlers.Documents
   alias TextDrop.Views
 
-  def index(conn), do: html(conn, Views.Home.index(%{}))
+  def index(%{params: params} = conn) do
+    html(conn, Views.Home.index(%{deleted: Map.has_key?(params, "deleted")}))
+  end
 
-  def about(conn), do: html(conn, Views.Home.about(%{}))
+  def about(conn), do: html(conn, Views.Home.about())
 
   def create(%{params: %{"pdf" => %Plug.Upload{} = upload}} = conn) do
     with {:ok, id} <- Documents.store(upload) do

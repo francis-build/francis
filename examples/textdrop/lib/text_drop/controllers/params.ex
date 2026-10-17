@@ -3,11 +3,14 @@ defmodule TextDrop.Controllers.Params do
   Casts request parameters into the values the handlers expect.
 
   Every function returns `{:ok, value}` or `{:error, {:invalid, field}}`, which
-  `TextDrop.ErrorHandler` turns into a 400 response naming the field.
+  `TextDrop.Errors` turns into a 400 response naming the field.
   """
 
-  @strategies %{"lines" => :lines, "lines_strict" => :lines_strict, "text" => :text}
+  alias TextDrop.Handlers.{Area, Pdf}
+
+  @strategies Map.new(Pdf.strategies(), &{Atom.to_string(&1), &1})
   @max_areas 50
+  @default_width 1400
   @width_range 100..3000
 
   @spec page(term()) :: {:ok, non_neg_integer()} | {:error, {:invalid, :page}}
@@ -28,7 +31,7 @@ defmodule TextDrop.Controllers.Params do
   def boolean(value, _field) when value in ["false", "0", "off"], do: {:ok, false}
   def boolean(_value, field), do: {:error, {:invalid, field}}
 
-  @spec strategy(term(), atom()) :: {:ok, atom()} | {:error, {:invalid, atom()}}
+  @spec strategy(term(), atom()) :: {:ok, Pdf.strategy()} | {:error, {:invalid, atom()}}
   def strategy(nil, _field), do: {:ok, :lines}
 
   def strategy(value, field) do
@@ -38,8 +41,9 @@ defmodule TextDrop.Controllers.Params do
     end
   end
 
+  @doc "Width of a rendered page in pixels. The default is what the workbench displays."
   @spec width(term()) :: {:ok, pos_integer()} | {:error, {:invalid, :width}}
-  def width(nil), do: {:ok, 1200}
+  def width(nil), do: {:ok, @default_width}
 
   def width(value) when is_binary(value) do
     case Integer.parse(value) do
@@ -50,34 +54,15 @@ defmodule TextDrop.Controllers.Params do
 
   def width(_value), do: {:error, {:invalid, :width}}
 
-  @doc "A list of `%{\"left\", \"top\", \"right\", \"bottom\"}` maps with numeric values, as sent by the workbench."
-  @spec areas(term()) :: {:ok, [TextDrop.Handlers.Pdf.area()]} | {:error, {:invalid, :areas}}
+  @doc "A list of area maps, as the workbench sends them."
+  @spec areas(term()) :: {:ok, [Area.t()]} | {:error, {:invalid, :areas}}
   def areas(areas) when is_list(areas) and length(areas) <= @max_areas do
-    areas
-    |> Enum.reduce_while({:ok, []}, fn area, {:ok, acc} ->
-      case area(area) do
-        {:ok, area} -> {:cont, {:ok, [area | acc]}}
-        error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, areas} -> {:ok, Enum.reverse(areas)}
-      error -> error
-    end
+    cast = Enum.map(areas, &Area.cast/1)
+
+    if Enum.all?(cast, &match?({:ok, _}, &1)),
+      do: {:ok, Enum.map(cast, fn {:ok, area} -> area end)},
+      else: {:error, {:invalid, :areas}}
   end
 
   def areas(_areas), do: {:error, {:invalid, :areas}}
-
-  defp area(%{"left" => left, "top" => top, "right" => right, "bottom" => bottom})
-       when is_number(left) and is_number(top) and is_number(right) and is_number(bottom) do
-    {:ok,
-     %{
-       left: min(left, right),
-       top: min(top, bottom),
-       right: max(left, right),
-       bottom: max(top, bottom)
-     }}
-  end
-
-  defp area(_area), do: {:error, {:invalid, :areas}}
 end

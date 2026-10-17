@@ -5,7 +5,7 @@ defmodule TextDrop.Router do
 
   plug(Francis.Plug.SecureHeaders)
 
-  # Scripts may only come from /assets (see priv/static/js/workbench.js). Styles
+  # Scripts may only come from /assets (see priv/static/js/workbench/). Styles
   # stay inline-friendly because `Francis.ErrorPage` renders an inline <style>.
   plug(Francis.Plug.CSP, directives: %{"style-src" => "'self' 'unsafe-inline'"})
 
@@ -16,13 +16,15 @@ defmodule TextDrop.Router do
   post("/", &Controllers.Home.create/1)
   get("/about", &Controllers.Home.about/1)
   get("/documents/:id", &Controllers.Documents.show/1)
+  post("/documents/:id/delete", &Controllers.Documents.delete/1)
 
-  # JSON API used by the workbench (priv/static/js/workbench.js)
+  # JSON API used by the workbench
   get("/api/documents/:id/pages/:page/image", &Controllers.Api.page_image/1)
   get("/api/documents/:id/pages/:page/text", &Controllers.Api.page_text/1)
   post("/api/documents/:id/pages/:page/areas", &Controllers.Api.page_areas/1)
   get("/api/documents/:id/pages/:page/words", &Controllers.Api.page_words/1)
   get("/api/documents/:id/pages/:page/tables", &Controllers.Api.page_tables/1)
 
-  unmatched(fn conn -> html(conn, 404, Francis.ErrorPage.render(404)) end)
+  # Through the error handler, so unknown API paths get JSON like every other error.
+  unmatched(fn _conn -> {:error, :route_not_found} end)
 end

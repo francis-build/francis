@@ -1,0 +1,6 @@
+                <div class="panel-controls">
+                    <%= strategy_select("vertical-strategy", "Columns") %>
+                    <%= strategy_select("horizontal-strategy", "Rows") %>
+                    <button type="button" id="tables-button">Find tables</button>
+                </div>
+                <div id="tables-output"><p class="muted">Not loaded.</p></div>

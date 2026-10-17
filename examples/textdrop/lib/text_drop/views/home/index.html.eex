@@ -1,3 +1,6 @@
+        <%= if @deleted do %>
+        <p class="notice" role="status">The document was deleted.</p>
+        <% end %>
         <section>
             <h2>Open Any PDF File</h2>
             <p>Upload a document to read its metadata, browse its pages, draw areas to extract text from, and inspect every word and table on a page.</p>

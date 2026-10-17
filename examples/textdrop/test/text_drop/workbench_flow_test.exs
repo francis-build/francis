@@ -1,15 +1,12 @@
 defmodule TextDrop.WorkbenchFlowTest do
   @moduledoc "Upload a PDF through the router and drive the document page and its API."
 
-  use ExUnit.Case, async: true
-
-  @moduletag :integration
+  use TextDrop.IntegrationCase, async: true
 
   import Plug.Conn
   import Plug.Test
 
   alias TextDrop.Handlers.Documents
-  alias TextDrop.PdfFixture
   alias TextDrop.Router
 
   @opts Router.init([])
@@ -24,23 +21,16 @@ defmodule TextDrop.WorkbenchFlowTest do
     |> request()
   end
 
-  setup_all do
-    dir = Path.join(System.tmp_dir!(), "textdrop-flow-test-#{System.unique_integer([:positive])}")
-    File.mkdir_p!(dir)
-
+  setup_all %{dir: dir} do
     conn = request(conn(:post, "/", %{"pdf" => PdfFixture.upload(dir)}))
     assert conn.status == 303
     assert ["/documents/" <> id] = get_resp_header(conn, "location")
-
-    on_exit(fn ->
-      Documents.delete(id)
-      File.rm_rf!(dir)
-    end)
+    on_exit(fn -> Documents.delete(id) end)
 
     %{id: id}
   end
 
-  test "the document page shows the metadata and page tables", %{id: id} do
+  test "the document page shows the metadata and page tables in tabs", %{id: id} do
     conn = request(conn(:get, "/documents/#{id}"))
 
     assert conn.status == 200
@@ -52,7 +42,33 @@ defmodule TextDrop.WorkbenchFlowTest do
 
     assert conn.resp_body =~ "<td>612 pt</td>"
     assert conn.resp_body =~ "<td>792 pt</td>"
-    assert conn.resp_body =~ ~s(src="/assets/js/workbench.js")
+
+    for tab <- ~w(metadata pages text areas words tables) do
+      assert conn.resp_body =~ ~s(id="tab-#{tab}")
+      assert conn.resp_body =~ ~s(id="panel-#{tab}")
+    end
+
+    assert conn.resp_body =~ ~s|<option value="lines_strict">lines (strict)</option>|
+    assert conn.resp_body =~ ~s(<script type="module" src="/assets/js/workbench/main.js">)
+    assert conn.resp_body =~ ~s(<form method="post" action="/documents/#{id}/delete")
+  end
+
+  test "deleting a document removes it and confirms on the home page", %{dir: dir} do
+    conn = request(conn(:post, "/", %{"pdf" => PdfFixture.upload(dir, "to-delete.pdf")}))
+    assert ["/documents/" <> id] = get_resp_header(conn, "location")
+    assert {:ok, _path} = Documents.fetch(id)
+
+    conn = request(conn(:post, "/documents/#{id}/delete"))
+    assert conn.status == 303
+    assert get_resp_header(conn, "location") == ["/?deleted=1"]
+
+    assert Documents.fetch(id) == {:error, :not_found}
+    assert request(conn(:get, "/documents/#{id}")).status == 404
+
+    conn = request(conn(:get, "/?deleted=1"))
+    assert conn.status == 200
+    assert conn.resp_body =~ "The document was deleted."
+    refute request(conn(:get, "/")).resp_body =~ "The document was deleted."
   end
 
   test "the page text is returned as JSON, escaped by the encoder", %{id: id} do
@@ -92,13 +108,8 @@ defmodule TextDrop.WorkbenchFlowTest do
   end
 
   test "tables are searched with the chosen strategies", %{id: id} do
-    conn =
-      request(
-        conn(
-          :get,
-          "/api/documents/#{id}/pages/0/tables?vertical_strategy=text&horizontal_strategy=lines"
-        )
-      )
+    path = "/api/documents/#{id}/pages/0/tables?vertical_strategy=text&horizontal_strategy=lines"
+    conn = request(conn(:get, path))
 
     assert conn.status == 200
     assert %{"page" => 0, "tables" => []} = json!(conn)
@@ -130,11 +141,8 @@ defmodule TextDrop.WorkbenchFlowTest do
     assert conn.status == 400
     assert %{"error" => "Invalid areas"} = json!(conn)
 
-    conn =
-      post_json("/api/documents/#{id}/pages/0/areas", %{
-        areas: [%{left: 700, top: 0, right: 900, bottom: 10}]
-      })
-
+    off_page = %{left: 700, top: 0, right: 900, bottom: 10}
+    conn = post_json("/api/documents/#{id}/pages/0/areas", %{areas: [off_page]})
     assert conn.status == 400
     assert %{"error" => "Invalid area"} = json!(conn)
   end

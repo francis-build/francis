@@ -1,0 +1,4 @@
+                <div class="panel-controls">
+                    <button type="button" id="words-button">Show words</button>
+                </div>
+                <p id="words-summary" class="muted">Not loaded. Words are drawn over the page; hover one to see its font and size.</p>

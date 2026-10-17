@@ -59,7 +59,7 @@ defmodule TextDrop.PdfFixture do
   end
 
   @doc "The fixture as a `Plug.Upload`, written into `dir`."
-  def upload(dir) do
-    %Plug.Upload{path: write!(dir), filename: "fixture.pdf", content_type: "application/pdf"}
+  def upload(dir, name \\ "fixture.pdf") do
+    %Plug.Upload{path: write!(dir, name), filename: name, content_type: "application/pdf"}
   end
 end

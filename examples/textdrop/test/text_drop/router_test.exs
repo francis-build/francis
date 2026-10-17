@@ -50,6 +50,14 @@ defmodule TextDrop.RouterTest do
       assert get_resp_header(conn, "content-type") == ["text/html; charset=utf-8"]
       assert conn.resp_body =~ "Not Found"
     end
+
+    test "unknown API routes get a 404 JSON body" do
+      conn = request(conn(:get, "/api/nope"))
+
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") == ["application/json; charset=utf-8"]
+      assert %{"error" => "Not Found"} = json!(conn)
+    end
   end
 
   describe "documents" do
@@ -62,6 +70,13 @@ defmodule TextDrop.RouterTest do
 
     test "GET /documents/:id with an id of the wrong shape is not found" do
       conn = request(conn(:get, "/documents/not-a-real-id"))
+
+      assert conn.status == 404
+      assert conn.resp_body =~ "Document not found"
+    end
+
+    test "POST /documents/:id/delete with an unknown id is not found" do
+      conn = request(conn(:post, "/documents/#{@unknown_id}/delete"))
 
       assert conn.status == 404
       assert conn.resp_body =~ "Document not found"

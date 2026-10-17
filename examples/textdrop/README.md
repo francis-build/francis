@@ -10,18 +10,25 @@ built on [pdf_extractor](https://hex.pm/packages/pdf_extractor).
 ```
 lib/text_drop/
   router.ex             routes, plugs and the error handler hook
-  error_handler.ex      {:error, reason} and exceptions -> HTML or JSON error responses
+  errors.ex             what each error reason means: status, title, message
+  error_handler.ex      sends errors as HTML pages, or as JSON under /api/
   static.ex             cache headers for digested assets
   handlers/             what the app does, independent of HTTP
     documents.ex        store uploads, find them by id, delete them
     pdf.ex              metadata, pages, text, areas, words, tables, rendering
+    area.ex             a rectangle on a page: build, clamp, hand to the extractor
+    metadata.ex         raw PDF metadata -> labelled values, dates reformatted
   controllers/          thin web layer: cast params, call a handler, render
     params.ex           request parameters -> values the handlers accept
     home.ex             upload form, upload, about page
     documents.ex        the document page
     api.ex              JSON endpoints used by the workbench
-  views/                EEx templates and the layout around them
-priv/static/js/workbench.js   the interactive page viewer
+  views/                EEx templates, a shared layout, one partial per tab
+priv/static/js/workbench/
+  main.js               wires the toolbar, the viewer and the panels together
+  overlay.js            canvas over the page: layers of boxes, hover, drawing
+  panels/*.js           one module per tab, each owning its controls and layer
+  client.js, tabs.js, status.js, geometry.js, dom.js
 ```
 
 ## Francis features used
@@ -66,7 +73,9 @@ mix francis.digest --clean    # removes the previous digest output before regene
 
 Digest output is ignored by git. The Dockerfile runs `mix assets.deploy` in the
 build stage, so templates link to hashed file names in production and to the
-plain names in development.
+plain names in development. The workbench script is loaded as an ES module;
+its `import` statements use the plain file names, which the digest keeps next
+to the hashed copies.
 
 ## Deploying
 

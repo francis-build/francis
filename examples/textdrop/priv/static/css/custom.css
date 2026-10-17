@@ -49,9 +49,39 @@ body > header.compact {
     color: var(--text-light);
 }
 
+.document-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
 .document-head h2 code {
     font-size: 0.65em;
     vertical-align: middle;
+}
+
+.document-head form {
+    margin: 0.5rem 0 0;
+}
+
+button.danger {
+    background: var(--bg);
+    color: var(--error);
+    border: var(--border-width) solid var(--error);
+}
+
+button.danger:enabled:hover {
+    background: var(--error);
+    color: #fff;
+}
+
+.notice {
+    padding: 0.75rem 1rem;
+    background: var(--accent-bg);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--standard-border-radius);
 }
 
 table.meta th,

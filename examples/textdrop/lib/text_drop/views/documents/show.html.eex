@@ -1,6 +1,11 @@
         <section class="document-head">
-            <h2>Document <code><%= escape(@id) %></code></h2>
-            <p><a href="/">Upload another PDF</a></p>
+            <div>
+                <h2>Document <code><%= escape(@id) %></code></h2>
+                <p><a href="/">Upload another PDF</a></p>
+            </div>
+            <form method="post" action="/documents/<%= escape(@id) %>/delete" data-confirm="Delete this document? This cannot be undone.">
+                <button type="submit" class="danger">Delete document</button>
+            </form>
         </section>
 
         <section class="workbench" id="workbench" data-document-id="<%= escape(@id) %>">
@@ -29,87 +34,14 @@
             </div>
 
             <div class="tabs" role="tablist" aria-label="Document details">
-                <button type="button" role="tab" id="tab-metadata" data-tab="metadata" aria-selected="true" aria-controls="panel-metadata">Metadata</button>
-                <button type="button" role="tab" id="tab-pages" data-tab="pages" aria-selected="false" aria-controls="panel-pages" tabindex="-1">Pages <span class="count"><%= length(@pages) %></span></button>
-                <button type="button" role="tab" id="tab-text" data-tab="text" aria-selected="false" aria-controls="panel-text" tabindex="-1">Text</button>
-                <button type="button" role="tab" id="tab-areas" data-tab="areas" aria-selected="false" aria-controls="panel-areas" tabindex="-1">Areas <span class="count" id="areas-count"></span></button>
-                <button type="button" role="tab" id="tab-words" data-tab="words" aria-selected="false" aria-controls="panel-words" tabindex="-1">Words <span class="count" id="words-count"></span></button>
-                <button type="button" role="tab" id="tab-tables" data-tab="tables" aria-selected="false" aria-controls="panel-tables" tabindex="-1">Tables <span class="count" id="tables-count"></span></button>
+                <%= for {{tab, label}, index} <- Enum.with_index(@tabs) do %>
+                <button type="button" role="tab" id="tab-<%= tab %>" data-tab="<%= tab %>" aria-controls="panel-<%= tab %>" aria-selected="<%= index == 0 %>"<%= if index > 0, do: ~s( tabindex="-1") %>><%= label %> <span class="count" id="<%= tab %>-count"><%= initial_count(tab, assigns) %></span></button>
+                <% end %>
             </div>
 
-            <section class="panel" id="panel-metadata" role="tabpanel" aria-labelledby="tab-metadata">
-                <table class="meta">
-                    <tbody>
-                        <tr><th scope="row">Pages</th><td><%= length(@pages) %></td></tr>
-                        <%= for {label, value} <- @metadata do %>
-                        <tr><th scope="row"><%= escape(label) %></th><td><%= escape(value) %></td></tr>
-                        <% end %>
-                    </tbody>
-                </table>
-                <%= if @metadata == [] do %>
-                <p class="muted">This document carries no metadata of its own.</p>
-                <% end %>
+            <%= for {{tab, _label}, index} <- Enum.with_index(@tabs) do %>
+            <section class="panel" id="panel-<%= tab %>" role="tabpanel" aria-labelledby="tab-<%= tab %>"<%= if index > 0, do: " hidden" %>>
+<%= panel(tab, assigns) %>
             </section>
-
-            <section class="panel" id="panel-pages" role="tabpanel" aria-labelledby="tab-pages" hidden>
-                <table class="pages">
-                    <thead>
-                        <tr><th>#</th><th>Width</th><th>Height</th><th>Rotation</th><th></th></tr>
-                    </thead>
-                    <tbody>
-                        <%= for page <- @pages do %>
-                        <tr>
-                            <td><%= page.number %></td>
-                            <td><%= points(page.width) %> pt</td>
-                            <td><%= points(page.height) %> pt</td>
-                            <td><%= page.rotation %>&deg;</td>
-                            <td><button type="button" class="secondary small" data-show-page="<%= page.number %>">Show</button></td>
-                        </tr>
-                        <% end %>
-                    </tbody>
-                </table>
-            </section>
-
-            <section class="panel" id="panel-text" role="tabpanel" aria-labelledby="tab-text" hidden>
-                <div class="panel-controls">
-                    <label class="check"><input type="checkbox" id="layout-toggle"> Keep layout</label>
-                    <button type="button" id="copy-text-button" class="secondary">Copy</button>
-                </div>
-                <pre id="page-text" class="page-text"></pre>
-            </section>
-
-            <section class="panel" id="panel-areas" role="tabpanel" aria-labelledby="tab-areas" hidden>
-                <p class="muted">Drag on the page to draw an area, then extract the text inside each one.</p>
-                <ol id="areas-list" class="areas-list"></ol>
-                <p id="areas-empty" class="muted">No areas yet.</p>
-                <div class="panel-controls">
-                    <button type="button" id="extract-button" disabled>Extract text in areas</button>
-                </div>
-            </section>
-
-            <section class="panel" id="panel-words" role="tabpanel" aria-labelledby="tab-words" hidden>
-                <div class="panel-controls">
-                    <button type="button" id="words-button">Show words</button>
-                </div>
-                <p id="words-summary" class="muted">Not loaded. Words are drawn over the page; hover one to see its font and size.</p>
-            </section>
-
-            <section class="panel" id="panel-tables" role="tabpanel" aria-labelledby="tab-tables" hidden>
-                <div class="panel-controls">
-                    <label for="vertical-strategy">Columns</label>
-                    <select id="vertical-strategy">
-                        <option value="lines">lines</option>
-                        <option value="lines_strict">lines (strict)</option>
-                        <option value="text">text</option>
-                    </select>
-                    <label for="horizontal-strategy">Rows</label>
-                    <select id="horizontal-strategy">
-                        <option value="lines">lines</option>
-                        <option value="lines_strict">lines (strict)</option>
-                        <option value="text">text</option>
-                    </select>
-                    <button type="button" id="tables-button">Find tables</button>
-                </div>
-                <div id="tables-output"><p class="muted">Not loaded.</p></div>
-            </section>
+            <% end %>
         </section>

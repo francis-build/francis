@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="<%= static_path("css/simple.css") %>">
     <link rel="stylesheet" href="<%= static_path("css/custom.css") %>">
     <%= for script <- @scripts do %>
-    <script src="<%= static_path(script) %>" defer></script>
+    <script type="module" src="<%= static_path(script) %>"></script>
     <% end %>
 </head>
 

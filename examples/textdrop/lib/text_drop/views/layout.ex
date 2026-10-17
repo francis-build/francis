@@ -13,7 +13,7 @@ defmodule TextDrop.Views.Layout do
   Wraps already-rendered HTML in the layout.
 
   Assigns: `:title`, `:hero` (show the logo and tagline) and `:scripts`
-  (logical paths of scripts to load with `defer`).
+  (logical paths of ES modules to load).
   """
   @spec render(iodata(), map()) :: String.t()
   def render(inner_content, assigns \\ %{}) do

@@ -16,7 +16,7 @@ defmodule TextDrop.Controllers.Api do
   def page_image(%{params: params} = conn) do
     with {:ok, path, page} <- document_page(params),
          {:ok, width} <- Params.width(params["width"]),
-         {:ok, png} <- Pdf.render(path, page, width: width) do
+         {:ok, png} <- Pdf.render(path, page, width) do
       conn
       |> put_resp_content_type("image/png", nil)
       |> put_resp_header("cache-control", "private, max-age=31536000, immutable")
@@ -32,11 +32,11 @@ defmodule TextDrop.Controllers.Api do
     end
   end
 
-  def page_areas(%{params: params, body_params: body} = conn) do
+  def page_areas(%{params: params} = conn) do
     with {:ok, path, page} <- document_page(params),
-         {:ok, areas} <- Params.areas(body["areas"]),
+         {:ok, areas} <- Params.areas(params["areas"]),
          {:ok, texts} <- Pdf.text_in_areas(path, page, areas) do
-      results = Enum.zip_with(areas, texts, &Map.put(&1, :text, &2))
+      results = Enum.zip_with(areas, texts, &(&1 |> Map.from_struct() |> Map.put(:text, &2)))
       json(conn, %{page: page, areas: results})
     end
   end
