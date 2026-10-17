@@ -10,15 +10,16 @@ servers:
 proxy:
   ssl: false
   host: textdrop.estevao.org
+  # Francis binds to PORT, 4000 in the Dockerfile. kamal-proxy polls this
+  # path on that port until it answers 2xx.
   app_port: 4000
   healthcheck:
     path: /health
 
+# Kamal runs a registry on this machine and tunnels it to the server over SSH,
+# so nothing is pushed to Docker Hub and no registry credentials are needed.
 registry:
-  username: nelsonmestevao
-
-  password:
-    - KAMAL_REGISTRY_PASSWORD
+  server: localhost:5555
 
 builder:
   arch: amd64

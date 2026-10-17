@@ -84,5 +84,14 @@ docker build -t textdrop .
 docker run --rm -p 4000:4000 textdrop
 ```
 
-`config/deploy.yml` deploys the image with [kamal](https://kamal-deploy.org):
-`kamal deploy`.
+`config/deploy.yml` deploys with [kamal](https://kamal-deploy.org). The image
+is not pushed to Docker Hub: Kamal starts a registry on your machine
+(`localhost:5555`) and tunnels it to the server over SSH, so no registry
+credentials are needed. This needs Docker and Kamal 2.10 or newer on your
+machine, and you have to stay online for the whole deploy because the server
+pulls the image through that tunnel.
+
+```sh
+kamal setup    # first time: installs Docker and kamal-proxy on the server
+kamal deploy
+```
