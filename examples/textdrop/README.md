@@ -10,6 +10,8 @@ built on [pdf_extractor](https://hex.pm/packages/pdf_extractor).
 ```
 lib/text_drop/
   router.ex             routes, plugs and the error handler hook
+  controller.ex         `use TextDrop.Controller`: response helpers, Plug.Conn, aliases
+  view.ex               `use TextDrop.View`: helpers, layout alias, `template/3`
   errors.ex             what each error reason means: status, title, message
   error_handler.ex      sends errors as HTML pages, or as JSON under /api/
   static.ex             cache headers for digested assets
@@ -23,7 +25,7 @@ lib/text_drop/
     home.ex             upload form, upload, about page
     documents.ex        the document page
     api.ex              JSON endpoints used by the workbench
-  views/                EEx templates, a shared layout, one partial per tab
+  views/                one module per page with its templates in a folder of the same name
 priv/static/js/workbench/
   main.js               wires the toolbar, the viewer and the panels together
   overlay.js            canvas over the page: layers of boxes, hover, drawing

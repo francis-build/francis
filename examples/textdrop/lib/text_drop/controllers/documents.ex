@@ -1,10 +1,7 @@
 defmodule TextDrop.Controllers.Documents do
   @moduledoc "The document page with its workbench, and deleting a document."
 
-  import Francis.ResponseHandlers, only: [html: 2, redirect: 3]
-
-  alias TextDrop.Handlers.{Documents, Pdf}
-  alias TextDrop.Views
+  use TextDrop.Controller
 
   def show(%{params: %{"id" => id}} = conn) do
     with {:ok, path} <- Documents.fetch(id),

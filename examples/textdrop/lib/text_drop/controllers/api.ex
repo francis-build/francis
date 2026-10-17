@@ -6,11 +6,7 @@ defmodule TextDrop.Controllers.Api do
   start with `/api/`.
   """
 
-  import Francis.ResponseHandlers, only: [json: 2]
-  import Plug.Conn, only: [put_resp_content_type: 3, put_resp_header: 3, send_resp: 3]
-
-  alias TextDrop.Controllers.Params
-  alias TextDrop.Handlers.{Documents, Pdf}
+  use TextDrop.Controller
 
   @doc "PNG render of the page. Documents never change, so the image may be cached for a year."
   def page_image(%{params: params} = conn) do

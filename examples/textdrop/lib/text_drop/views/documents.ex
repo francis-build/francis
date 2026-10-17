@@ -3,15 +3,12 @@ defmodule TextDrop.Views.Documents do
   The document page: a toolbar, the page viewer, and one tab per panel below.
 
   Tabs and panels are generated from `@tabs`; each panel has a partial named
-  after it under `documents/`.
+  after it in this module's template directory.
   """
 
-  require EEx
-
-  import TextDrop.Views.Helpers
+  use TextDrop.View
 
   alias TextDrop.Handlers.Pdf
-  alias TextDrop.Views.Layout
 
   @tabs [
     metadata: "Metadata",
@@ -22,22 +19,19 @@ defmodule TextDrop.Views.Documents do
     tables: "Tables"
   ]
   @strategy_labels %{lines: "lines", lines_strict: "lines (strict)", text: "text"}
-  @templates "lib/text_drop/views/documents"
-
-  EEx.function_from_file(:defp, :show_body, "#{@templates}/show.html.eex", [:assigns])
 
   # Panels whose markup comes from the document. The others are static shells
   # that the script fills in.
   @dynamic_panels [:metadata, :pages]
 
+  template(:show_body, "show.html.eex")
+
   for {tab, _label} <- @tabs do
-    template = "#{@templates}/_#{tab}.html.eex"
+    template(:"#{tab}_panel", "_#{tab}.html.eex", assigns: tab in @dynamic_panels)
 
     if tab in @dynamic_panels do
-      EEx.function_from_file(:defp, :"#{tab}_panel", template, [:assigns])
       defp panel(unquote(tab), assigns), do: unquote(:"#{tab}_panel")(assigns)
     else
-      EEx.function_from_file(:defp, :"#{tab}_panel", template, [])
       defp panel(unquote(tab), _assigns), do: unquote(:"#{tab}_panel")()
     end
   end

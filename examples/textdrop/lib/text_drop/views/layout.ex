@@ -1,13 +1,11 @@
 defmodule TextDrop.Views.Layout do
   @moduledoc "The HTML document around every page: head, header, nav and footer."
 
-  require EEx
-
-  import TextDrop.Views.Helpers
+  use TextDrop.View
 
   @defaults %{title: "TextDrop", hero: false, scripts: []}
 
-  EEx.function_from_file(:defp, :layout, "lib/text_drop/views/layout.html.eex", [:assigns])
+  template(:layout, "layout.html.eex")
 
   @doc """
   Wraps already-rendered HTML in the layout.

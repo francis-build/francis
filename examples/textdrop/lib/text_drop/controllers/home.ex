@@ -1,10 +1,7 @@
 defmodule TextDrop.Controllers.Home do
   @moduledoc "The upload form, the about page, and the upload itself."
 
-  import Francis.ResponseHandlers, only: [html: 2, redirect: 3]
-
-  alias TextDrop.Handlers.Documents
-  alias TextDrop.Views
+  use TextDrop.Controller
 
   def index(%{params: params} = conn) do
     html(conn, Views.Home.index(%{deleted: Map.has_key?(params, "deleted")}))
