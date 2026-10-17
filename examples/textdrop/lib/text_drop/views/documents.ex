@@ -2,8 +2,7 @@ defmodule TextDrop.Views.Documents do
   @moduledoc """
   The document page: a toolbar, the page viewer, and one tab per panel below.
 
-  Tabs and panels are generated from `@tabs`; each panel has a partial named
-  after it in this module's template directory.
+  Tabs are generated from `@tabs`; each panel is the partial of the same name.
   """
 
   use TextDrop.View
@@ -20,21 +19,7 @@ defmodule TextDrop.Views.Documents do
   ]
   @strategy_labels %{lines: "lines", lines_strict: "lines (strict)", text: "text"}
 
-  # Panels whose markup comes from the document. The others are static shells
-  # that the script fills in.
-  @dynamic_panels [:metadata, :pages]
-
   template(:show_body, "show.html.eex")
-
-  for {tab, _label} <- @tabs do
-    template(:"#{tab}_panel", "_#{tab}.html.eex", assigns: tab in @dynamic_panels)
-
-    if tab in @dynamic_panels do
-      defp panel(unquote(tab), assigns), do: unquote(:"#{tab}_panel")(assigns)
-    else
-      defp panel(unquote(tab), _assigns), do: unquote(:"#{tab}_panel")()
-    end
-  end
 
   def show(assigns) do
     assigns

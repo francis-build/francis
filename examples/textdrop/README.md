@@ -11,7 +11,7 @@ built on [pdf_extractor](https://hex.pm/packages/pdf_extractor).
 lib/text_drop/
   router.ex             routes, plugs and the error handler hook
   controller.ex         `use TextDrop.Controller`: response helpers, Plug.Conn, aliases
-  view.ex               `use TextDrop.View`: helpers, layout alias, `template/3`
+  view.ex               `use TextDrop.View`: helpers, layout alias, `template/3`, `render_partial/2`
   errors.ex             what each error reason means: status, title, message
   error_handler.ex      sends errors as HTML pages, or as JSON under /api/
   static.ex             cache headers for digested assets

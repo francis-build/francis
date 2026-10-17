@@ -41,7 +41,7 @@
 
             <%= for {{tab, _label}, index} <- Enum.with_index(@tabs) do %>
             <section class="panel" id="panel-<%= tab %>" role="tabpanel" aria-labelledby="tab-<%= tab %>"<%= if index > 0, do: " hidden" %>>
-<%= panel(tab, assigns) %>
+<%= render_partial(tab, assigns) %>
             </section>
             <% end %>
         </section>
