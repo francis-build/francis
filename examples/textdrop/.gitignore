@@ -15,3 +15,14 @@
 
 # If the VM crashes, it generates a dump, let's ignore it too.
 erl_crash.dump
+
+# Output of `mix francis.digest` (written in place next to the sources).
+/priv/static/cache_manifest.json
+/priv/static/**/*.gz
+/priv/static/**/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].*
+
+# Editor and language-server artifacts.
+.expert/
+
+# ExUnit `@tag :tmp_dir` scratch space.
+/tmp/

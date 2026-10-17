@@ -1,0 +1,6 @@
+                <p class="muted">Drag on the page to draw an area, then extract the text inside each one.</p>
+                <ol id="areas-list" class="areas-list"></ol>
+                <p id="areas-empty" class="muted">No areas yet.</p>
+                <div class="panel-controls">
+                    <button type="button" id="extract-button" disabled>Extract text in areas</button>
+                </div>

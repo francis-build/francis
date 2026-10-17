@@ -1,0 +1,47 @@
+        <section class="document-head">
+            <div>
+                <h2>Document <code><%= escape(@id) %></code></h2>
+                <p><a href="/">Upload another PDF</a></p>
+            </div>
+            <form method="post" action="/documents/<%= escape(@id) %>/delete" data-confirm="Delete this document? This cannot be undone.">
+                <button type="submit" class="danger">Delete document</button>
+            </form>
+        </section>
+
+        <section class="workbench" id="workbench" data-document-id="<%= escape(@id) %>">
+            <div class="toolbar">
+                <label for="page-select">Page</label>
+                <select id="page-select">
+                    <%= for page <- @pages do %>
+                    <option value="<%= page.number %>" data-width="<%= page.width %>" data-height="<%= page.height %>">Page <%= page.number %></option>
+                    <% end %>
+                </select>
+                <button type="button" id="clear-button" class="secondary">Clear overlays</button>
+                <span class="legend" aria-hidden="true">
+                    <span class="swatch area"></span> areas
+                    <span class="swatch word"></span> words
+                    <span class="swatch table"></span> tables
+                </span>
+                <span id="status" class="status" role="status" aria-live="polite"></span>
+            </div>
+
+            <div class="viewer">
+                <div class="stage" id="stage">
+                    <img id="page-image" alt="Rendered page">
+                    <canvas id="overlay" aria-hidden="true"></canvas>
+                </div>
+                <p class="readout" id="readout">Drag on the page to draw an area.</p>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Document details">
+                <%= for {{tab, label}, index} <- Enum.with_index(@tabs) do %>
+                <button type="button" role="tab" id="tab-<%= tab %>" data-tab="<%= tab %>" aria-controls="panel-<%= tab %>" aria-selected="<%= index == 0 %>"<%= if index > 0, do: ~s( tabindex="-1") %>><%= label %> <span class="count" id="<%= tab %>-count"><%= initial_count(tab, assigns) %></span></button>
+                <% end %>
+            </div>
+
+            <%= for {{tab, _label}, index} <- Enum.with_index(@tabs) do %>
+            <section class="panel" id="panel-<%= tab %>" role="tabpanel" aria-labelledby="tab-<%= tab %>"<%= if index > 0, do: " hidden" %>>
+<%= render_partial(tab, assigns) %>
+            </section>
+            <% end %>
+        </section>

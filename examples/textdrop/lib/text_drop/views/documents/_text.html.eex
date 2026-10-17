@@ -1,0 +1,5 @@
+                <div class="panel-controls">
+                    <label class="check"><input type="checkbox" id="layout-toggle"> Keep layout</label>
+                    <button type="button" id="copy-text-button" class="secondary">Copy</button>
+                </div>
+                <pre id="page-text" class="page-text"></pre>
