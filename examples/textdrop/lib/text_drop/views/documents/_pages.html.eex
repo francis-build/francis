@@ -1,0 +1,16 @@
+                <table class="pages">
+                    <thead>
+                        <tr><th>#</th><th>Width</th><th>Height</th><th>Rotation</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        <%= for page <- @pages do %>
+                        <tr>
+                            <td><%= page.number %></td>
+                            <td><%= points(page.width) %> pt</td>
+                            <td><%= points(page.height) %> pt</td>
+                            <td><%= page.rotation %>&deg;</td>
+                            <td><button type="button" class="secondary small" data-show-page="<%= page.number %>">Show</button></td>
+                        </tr>
+                        <% end %>
+                    </tbody>
+                </table>

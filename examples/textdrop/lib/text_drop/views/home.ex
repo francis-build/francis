@@ -1,10 +1,12 @@
 defmodule TextDrop.Views.Home do
-  require EEx
+  @moduledoc "The upload form and the about page."
 
-  EEx.function_from_file(:def, :index, "lib/text_drop/views/home/index.html.eex", [:assigns])
-  EEx.function_from_file(:def, :about, "lib/text_drop/views/home/about.html.eex", [:assigns])
+  use TextDrop.View
 
-  def static_path(logical_path) do
-    Francis.Static.static_path(logical_path, "/assets")
-  end
+  template(:index_body, "index.html.eex")
+  template(:about_body, "about.html.eex", assigns: false)
+
+  def index(assigns), do: Layout.render(index_body(assigns), %{hero: true})
+
+  def about, do: Layout.render(about_body(), %{title: "About TextDrop", hero: true})
 end

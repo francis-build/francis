@@ -1,0 +1,11 @@
+                <table class="meta">
+                    <tbody>
+                        <tr><th scope="row">Pages</th><td><%= length(@pages) %></td></tr>
+                        <%= for {label, value} <- @metadata do %>
+                        <tr><th scope="row"><%= escape(label) %></th><td><%= escape(value) %></td></tr>
+                        <% end %>
+                    </tbody>
+                </table>
+                <%= if @metadata == [] do %>
+                <p class="muted">This document carries no metadata of its own.</p>
+                <% end %>

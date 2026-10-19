@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= escape(@title) %></title>
+    <link rel="stylesheet" href="<%= static_path("css/simple.css") %>">
+    <link rel="stylesheet" href="<%= static_path("css/custom.css") %>">
+    <%= for script <- @scripts do %>
+    <script type="module" src="<%= static_path(script) %>"></script>
+    <% end %>
+</head>
+
+<body>
+    <header class="<%= if @hero, do: "hero", else: "compact" %>">
+        <nav>
+            <a href="/">Home</a>
+            <a href="/about">About</a>
+        </nav>
+
+        <%= if @hero do %>
+        <img src="<%= static_path("images/textdrop.png") %>" alt="TextDrop Logo" class="logo"/>
+        <h1>Welcome to TextDrop</h1>
+        <p>The one stop shop for all your PDF extracting needs.</p>
+        <% else %>
+        <a href="/" class="brand"><img src="<%= static_path("images/textdrop.png") %>" alt="TextDrop" class="logo logo-small"/></a>
+        <% end %>
+    </header>
+
+    <main>
+<%= @inner_content %>
+    </main>
+
+    <footer>
+        <p>&copy; <%= Date.utc_today().year %> TextDrop. All rights reserved.</p>
+    </footer>
+</body>
+
+</html>

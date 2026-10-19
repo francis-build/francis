@@ -1,3 +1,6 @@
+/* TextDrop sits on top of simple.css. These rules widen the page, keep the
+   light palette, and style the document workbench. */
+
 @media (prefers-color-scheme: dark) {
     :root {
         color-scheme: light;
@@ -12,5 +15,376 @@
         --preformatted: #444;
         --marked: #ffdd33;
         --disabled: #efefef;
+    }
+}
+
+:root {
+    /* One colour per overlay type, as RGB triplets so JS and CSS can add alpha. */
+    --area-rgb: 180, 83, 9;
+    --word-rgb: 15, 118, 110;
+    --table-rgb: 157, 23, 77;
+    --error: #b00020;
+}
+
+/* simple.css caps the content column at 45rem; documents need room. */
+body {
+    grid-template-columns: 1fr min(84rem, 95%) 1fr;
+}
+
+body > header.compact {
+    padding: 0.75rem 0 1rem;
+}
+
+.logo {
+    width: 200px;
+    height: auto;
+}
+
+.logo-small {
+    width: 72px;
+    margin-top: 0.5rem;
+}
+
+.muted {
+    color: var(--text-light);
+}
+
+.document-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.document-head h2 code {
+    font-size: 0.65em;
+    vertical-align: middle;
+}
+
+.document-head form {
+    margin: 0.5rem 0 0;
+}
+
+button.danger {
+    background: var(--bg);
+    color: var(--error);
+    border: var(--border-width) solid var(--error);
+}
+
+button.danger:enabled:hover {
+    background: var(--error);
+    color: #fff;
+}
+
+.notice {
+    padding: 0.75rem 1rem;
+    background: var(--accent-bg);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--standard-border-radius);
+}
+
+table.meta th,
+table.pages th {
+    text-align: left;
+}
+
+table.meta th {
+    white-space: nowrap;
+    width: 1%;
+}
+
+button.secondary {
+    background: var(--bg);
+    color: var(--text);
+    border: var(--border-width) solid var(--border);
+}
+
+button.secondary:enabled:hover {
+    background: var(--accent-bg);
+    color: var(--text);
+}
+
+button.small {
+    margin: 0;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+/* Toolbar above the page */
+
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--accent-bg);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--standard-border-radius);
+}
+
+.toolbar label,
+.toolbar select,
+.toolbar button {
+    margin: 0;
+}
+
+.legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.legend .swatch + .swatch,
+.legend .swatch:not(:first-child) {
+    margin-left: 0.5rem;
+}
+
+.status {
+    margin-left: auto;
+    font-family: var(--mono-font);
+    font-size: 0.85rem;
+    color: var(--text-light);
+}
+
+.status.error {
+    color: var(--error);
+}
+
+/* The page itself */
+
+.viewer {
+    max-width: 60rem;
+    margin: 1rem auto 0;
+}
+
+.stage {
+    position: relative;
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--standard-border-radius);
+    overflow: hidden;
+    background: repeating-linear-gradient(45deg, var(--accent-bg) 0 8px, var(--bg) 8px 16px);
+    box-shadow: 0 12px 32px -20px rgba(0, 0, 0, 0.45);
+    min-height: 12rem;
+}
+
+.stage img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.stage canvas {
+    position: absolute;
+    inset: 0;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.readout {
+    min-height: 1.5em;
+    margin: 0.5rem 0 0;
+    font-family: var(--mono-font);
+    font-size: 0.85rem;
+    color: var(--text-light);
+    white-space: pre;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Tabs below the page */
+
+.tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin: 1.5rem 0 0;
+    border-bottom: var(--border-width) solid var(--border);
+}
+
+.tabs [role="tab"] {
+    margin: 0 0 calc(-1 * var(--border-width));
+    padding: 0.5rem 0.9rem;
+    background: transparent;
+    color: var(--text-light);
+    border: var(--border-width) solid transparent;
+    border-bottom-color: transparent;
+    border-radius: var(--standard-border-radius) var(--standard-border-radius) 0 0;
+    font-weight: 500;
+}
+
+.tabs [role="tab"]:enabled:hover {
+    background: var(--accent-bg);
+    color: var(--accent);
+}
+
+.tabs [role="tab"][aria-selected="true"] {
+    background: var(--bg);
+    color: var(--text);
+    border-color: var(--border);
+    border-bottom-color: var(--bg);
+}
+
+.tabs .count {
+    display: inline-block;
+    min-width: 1.4em;
+    margin-left: 0.3rem;
+    padding: 0 0.35em;
+    border-radius: 999px;
+    background: var(--accent-bg);
+    font-family: var(--mono-font);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--text-light);
+}
+
+.tabs .count:empty {
+    display: none;
+}
+
+.panel {
+    padding: 1rem 0 0;
+}
+
+.panel-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.panel-controls label,
+.panel-controls select,
+.panel-controls button {
+    margin: 0;
+}
+
+.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.check input {
+    margin: 0;
+}
+
+.panel table {
+    margin: 0.5rem 0;
+}
+
+.swatch {
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+    border-radius: 2px;
+    border: 2px solid;
+    vertical-align: -0.05em;
+}
+
+.swatch.area {
+    border-color: rgb(var(--area-rgb));
+    background: rgba(var(--area-rgb), 0.15);
+}
+
+.swatch.word {
+    border-color: rgb(var(--word-rgb));
+    background: rgba(var(--word-rgb), 0.15);
+}
+
+.swatch.table {
+    border-color: rgb(var(--table-rgb));
+    background: rgba(var(--table-rgb), 0.15);
+}
+
+.areas-list {
+    padding-left: 1.5rem;
+    margin: 0 0 0.75rem;
+}
+
+.areas-list li {
+    margin-bottom: 0.75rem;
+}
+
+.areas-list li::marker {
+    color: rgb(var(--area-rgb));
+    font-weight: 600;
+}
+
+.area-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.area-head code {
+    font-size: 0.8rem;
+}
+
+.areas-list pre {
+    margin: 0.5rem 0 0;
+    max-height: 12rem;
+    overflow: auto;
+    white-space: pre-wrap;
+}
+
+.page-text {
+    max-height: 32rem;
+    overflow: auto;
+    white-space: pre;
+    margin: 0;
+}
+
+.page-text:empty::before {
+    content: "No text on this page.";
+    color: var(--text-light);
+    font-family: var(--sans-font);
+}
+
+#tables-output figure {
+    margin: 0 0 1rem;
+    overflow-x: auto;
+}
+
+#tables-output figcaption {
+    font-family: var(--mono-font);
+    font-size: 0.8rem;
+    color: var(--text-light);
+}
+
+#tables-output table {
+    margin: 0.25rem 0;
+    font-size: 0.85rem;
+}
+
+#tables-output td {
+    padding: 0.25rem 0.5rem;
+}
+
+/* One quiet reveal on load. */
+@media (prefers-reduced-motion: no-preference) {
+    main > section {
+        animation: rise 0.45s ease-out both;
+    }
+
+    main > section:nth-child(2) {
+        animation-delay: 0.06s;
+    }
+}
+
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
     }
 }

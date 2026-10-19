@@ -3,3 +3,5 @@ _build
 deps
 doc
 .elixir_ls
+priv/uploads/*.pdf
+**/.expert

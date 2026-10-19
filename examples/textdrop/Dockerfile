@@ -19,6 +19,8 @@ COPY . .
 
 # Install dependencies
 RUN mix local.hex --force && mix local.rebar --force && mix deps.get && mix compile
+# Digest static assets (writes priv/static/cache_manifest.json)
+RUN mix assets.deploy
 # Build the release
 RUN mix release
 
@@ -45,7 +47,8 @@ COPY --from=build /app/priv ./priv
 # Set environment variables
 ENV HOME=/app
 
-# Expose port
+# Francis binds to $PORT when bandit_opts sets no :port
+ENV PORT=4000
 EXPOSE 4000
 
 # Start the application
